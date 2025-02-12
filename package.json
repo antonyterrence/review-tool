@@ -2,9 +2,9 @@
   "name": "review-tool-server",
   "version": "1.0.0",
   "description": "Collaborative Review Tool Server",
-  "main": "server.js",
+  "main": "review-tool-server/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node review-tool-server/server.js"
   },
   "dependencies": {
     "express": "^4.18.2",

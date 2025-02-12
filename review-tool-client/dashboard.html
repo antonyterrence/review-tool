@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - Collaborative Review Tool</title>
+  <link rel="stylesheet" href="css/review-tool.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+    }
+    h1 {
+      text-align: center;
+    }
+    /* Upload Section styling */
+    #uploadSection {
+      margin-bottom: 20px;
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #uploadSection h3 {
+      margin-top: 0;
+    }
+    #uploadForm input, 
+    #uploadForm button {
+      display: block;
+      margin: 5px 0;
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    /* Document list styling */
+    #docList {
+      max-width: 800px;
+      margin: auto;
+    }
+    .docItem {
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .docItem a {
+      text-decoration: none;
+      color: #007BFF;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .docDetails {
+      font-size: 0.9em;
+      color: #555;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dashboard</h1>
+
+  <!-- Upload Section (visible only for writers) -->
+  <div id="uploadSection" style="display:none;">
+    <h3>Upload New Webhelp</h3>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" id="webhelpZip" accept=".zip" required>
+      <input type="text" id="reviewers" placeholder="Enter reviewer names (comma separated)" required>
+      <button type="submit">Upload Webhelp</button>
+    </form>
+  </div>
+
+  <!-- Document List -->
+  <div id="docList">
+    <!-- Documents will be listed here -->
+  </div>
+  
+  <script>
+    /*********************************************
+     * Dashboard Page Script
+     *********************************************/
+    // Assume currentUser and currentRole are stored in localStorage after login.
+    let currentUser = localStorage.getItem("currentUser") || "writer1";
+    let currentRole = localStorage.getItem("currentRole") || "writer";
+    localStorage.setItem("currentUser", currentUser);
+    localStorage.setItem("currentRole", currentRole);
+
+    // Show upload section only if the current user is a writer.
+    if (currentRole === "writer") {
+      document.getElementById("uploadSection").style.display = "block";
+    }
+
+    // Helper functions for localStorage (document records stored under "allDocuments")
+    function getAllDocuments() {
+      return JSON.parse(localStorage.getItem("allDocuments") || "[]");
+    }
+    function saveAllDocuments(docs) {
+      localStorage.setItem("allDocuments", JSON.stringify(docs));
+    }
+
+    // Render the document list on the dashboard.
+    function renderDashboard() {
+      const docListDiv = document.getElementById("docList");
+      docListDiv.innerHTML = "";
+      const allDocs = getAllDocuments();
+      let filteredDocs = [];
+      if (currentRole === "writer") {
+        filteredDocs = allDocs.filter(doc => doc.uploader === currentUser);
+      } else if (currentRole === "reviewer") {
+        filteredDocs = allDocs.filter(doc => doc.reviewers.indexOf(currentUser) !== -1);
+      }
+      if (filteredDocs.length === 0) {
+        docListDiv.innerHTML = "<p>No documents available.</p>";
+        return;
+      }
+      filteredDocs.forEach(doc => {
+        const docDiv = document.createElement("div");
+        docDiv.className = "docItem";
+        // Create a clickable title.
+        const docLink = document.createElement("a");
+        docLink.textContent = doc.title || `Document ${doc.webhelpId}`;
+        // Clicking on the title redirects to review.html with document parameters (including subFolder).
+        docLink.href = `review.html?webhelpId=${doc.webhelpId}&version=${doc.version}&subFolder=${encodeURIComponent(doc.subFolder)}`;
+        docDiv.appendChild(docLink);
+        // Show additional details.
+        const details = document.createElement("div");
+        details.className = "docDetails";
+        details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${doc.status}`;
+        docDiv.appendChild(details);
+        docListDiv.appendChild(docDiv);
+      });
+    }
+    
+    renderDashboard();
+
+    // Upload Form Submission (for writers)
+    const uploadForm = document.getElementById("uploadForm");
+    if (uploadForm) {
+      uploadForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        const fileInput = document.getElementById("webhelpZip");
+        const file = fileInput.files[0];
+        const reviewersInput = document.getElementById("reviewers").value.trim();
+
+        if (!file) {
+          alert("Please select a .zip file to upload.");
+          return;
+        }
+        if (reviewersInput === "") {
+          alert("Please enter reviewer names (comma separated).");
+          return;
+        }
+        // Convert reviewer names string into an array.
+        const reviewerNames = reviewersInput.split(",")
+          .map(name => name.trim())
+          .filter(name => name !== "");
+
+        // Prepare form data.
+        const formData = new FormData();
+        formData.append("webhelpZip", file);
+
+        // Send the file to the server endpoint.
+        fetch("/uploadWebhelp", {
+          method: "POST",
+          body: formData,
+        })
+          .then(response => response.json())
+          .then(data => {
+            // Expected server response: { webhelpId, version, title, subFolder }
+            alert("Upload successful!\n" +
+                  "Document Title: " + data.title + "\n" +
+                  "Document ID: " + data.webhelpId + ", Version: " + data.version);
+            // Create a new document record.
+            const newDoc = {
+              webhelpId: data.webhelpId,
+              version: data.version,
+              title: data.title,
+              subFolder: data.subFolder,  // Include the dynamic subfolder name.
+              uploader: currentUser,
+              reviewers: reviewerNames,
+              status: "Under Review"
+            };
+            let allDocs = getAllDocuments();
+            allDocs.push(newDoc);
+            saveAllDocuments(allDocs);
+            // Refresh the document list.
+            renderDashboard();
+            // Clear the upload form.
+            uploadForm.reset();
+          })
+          .catch(error => {
+            console.error("Error uploading file:", error);
+            alert("Error uploading file.");
+          });
+      });
+    }
+  </script>
+</body>
+</html>

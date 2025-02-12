@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Review Document</title>
+  <link rel="stylesheet" href="css/review-tool.css">
+  <link rel="stylesheet" href="css/review.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/annotator/1.2.10/annotator.min.css">
+</head>
+<body>
+  <!-- Header Section with a dummy search box and icon -->
+  <header>
+    <div class="header-container">
+      <h1>Collaborative Review Tool</h1>
+      <div class="search-box">
+        <input type="text" placeholder="Search..." />
+        <!-- Using a Unicode search icon; you can replace this with an image if desired -->
+        <button class="search-button">&#128269;</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div id="container">
+    <!-- TOC Panel -->
+    <div id="tocPanel">
+      <h3>Table of Contents</h3>
+      <div id="tocList"></div>
+    </div>
+    <!-- Topic Panel -->
+    <div id="topicPanel">
+      <h3>Topic Content</h3>
+      <div id="topicContent"></div>
+    </div>
+    <!-- Review Panel -->
+    <div id="reviewPanel">
+      <h3>Review Panel</h3>
+      <div id="trackChanges">
+        <div id="reviewList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div id="contextMenu">
+    <button id="commentButton">Add Comment</button>
+    <button id="highlightButton">Highlight</button>
+    <button id="deleteButton">Delete (Strike Through)</button>
+    <button id="replaceButton">Replace Text</button>
+  </div>
+
+  <!-- Modals -->
+  <div id="replyModal" class="modal">
+    <h3>Add Reply</h3>
+    <textarea id="replyText" placeholder="Enter your reply"></textarea>
+    <button id="submitReply">Submit</button>
+    <button id="cancelReply">Cancel</button>
+  </div>
+
+  <div id="editModal" class="modal">
+    <h3>Edit Comment</h3>
+    <textarea id="editText" placeholder="Edit your comment"></textarea>
+    <button id="submitEdit">Save</button>
+    <button id="cancelEdit">Cancel</button>
+  </div>
+
+  <div id="overlay"></div>
+
+  <div id="speechBubble" class="modal">
+    <h3>Add Comment</h3>
+    <textarea id="commentText" placeholder="Enter your comment"></textarea>
+    <button id="submitComment">Submit</button>
+    <button id="cancelComment">Cancel</button>
+  </div>
+
+  <div id="replaceModal" class="modal">
+    <h3>Replace Text</h3>
+    <input type="text" id="replaceFrom" placeholder="Text to replace" readonly>
+    <input type="text" id="replaceTo" placeholder="New text">
+    <button id="replaceConfirm">Replace</button>
+    <button id="replaceCancel">Cancel</button>
+  </div>
+
+  <script src="js/review.js"></script>
+</body>
+</html>

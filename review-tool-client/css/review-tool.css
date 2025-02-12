@@ -1,0 +1,104 @@
+/* Base styles for the entire page */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+  }
+  
+  /* Styling for the login section */
+  #loginPage {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 20px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  
+  #loginPage h2 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  /* Style the form elements inside the login page */
+  #loginPage form label {
+    display: block;
+    margin-top: 10px;
+  }
+  
+  #loginPage form input,
+  #loginPage form select,
+  #loginPage form button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+  }
+  
+  /* Styling for the dashboards (both writer and reviewer) */
+  #writerDashboard, 
+  #reviewerDashboard {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  
+  #writerDashboard h2, 
+  #reviewerDashboard h2 {
+    margin-top: 0;
+  }
+  
+  /* Style for each section within the dashboards */
+  section {
+    margin-bottom: 20px;
+  }
+  
+  section h3 {
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 5px;
+  }
+  
+  /* Styling for forms within dashboards */
+  form label {
+    display: block;
+    margin-top: 10px;
+  }
+  
+  form input[type="text"],
+  form input[type="file"],
+  form select,
+  form button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+  }
+  
+  /* Style the document lists (for writer and reviewer) */
+  #writerDocuments, 
+  #reviewerDocuments {
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #fafafa;
+  }
+  
+  #writerDocuments div, 
+  #reviewerDocuments div {
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+  }
+  
+  #writerDocuments div:last-child, 
+  #reviewerDocuments div:last-child {
+    border-bottom: none;
+  }
+  

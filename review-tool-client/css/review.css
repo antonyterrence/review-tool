@@ -1,0 +1,482 @@
+/* review.css */
+
+/* Three-panel layout styling */
+html, body {
+    height: 100%;
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+  #container {
+    display: flex;
+    height: 100%;
+  }
+  /* Left panel (TOC) */
+  #tocPanel {
+    width: 250px;
+    border-right: 1px solid #ccc;
+    padding: 10px;
+    overflow-y: auto;
+  }
+  /* Middle panel (Topic Area) */
+  #topicPanel {
+    flex: 2;
+    border-right: 1px solid #ccc;
+    padding: 10px;
+    overflow-y: auto;
+    position: relative;
+  }
+  /* Right panel (Review Panel) */
+  #reviewPanel {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    background: #f9f9f9;
+  }
+  /* TOC link styling */
+  #tocPanel a {
+    color: #007BFF;
+    text-decoration: none;
+    display: block;
+    margin: 4px 0;
+    cursor: pointer;
+  }
+  #tocPanel a:hover {
+    text-decoration: underline;
+  }
+  /* Annotation styles */
+  .annotator-hl {
+    background-color: yellow;
+    cursor: pointer;
+  }
+  .deleted-text {
+    text-decoration: line-through;
+    color: #999;
+  }
+  .inserted-text {
+    color: blue;
+  }
+  /* Context Menu */
+  #contextMenu {
+    display: none;
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+  }
+  #contextMenu button {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+  #contextMenu button:hover {
+    background: #f0f0f0;
+  }
+  /* Review Panel Items */
+  #reviewList {
+    margin-bottom: 10px;
+  }
+  .review-item {
+    margin: 10px 0;
+    padding: 10px;
+    background: white;
+    border-left: 3px solid #ddd;
+  }
+  .review-item.comment {
+    border-color: #4CAF50;
+  }
+  .review-item.deletion {
+    border-color: #f44336;
+  }
+  .deletion-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  .deletion-text {
+    color: #f44336;
+    font-style: italic;
+  }
+  .comment-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+  }
+  .comment-actions button {
+    padding: 2px 8px;
+    font-size: 0.9em;
+  }
+  .replies {
+    margin-left: 20px;
+    border-left: 2px solid #ddd;
+    padding-left: 10px;
+  }
+  .timestamp {
+    float: right;
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 2px;
+  }
+  .text-highlight {
+    animation: highlight-fade 2s ease-out;
+  }
+  @keyframes highlight-fade {
+    0% { background-color: #ffeb3b; }
+    100% { background-color: transparent; }
+  }
+  .modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+    z-index: 1001;
+  }
+  #overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+  }
+  /* Comment options menu styling */
+  .comment-options-menu button {
+    display: block;
+    width: 100%;
+    padding: 5px;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  .comment-options-menu button:hover {
+    background: #f0f0f0;
+  }
+  /* Marker styling for commented text */
+  .comment-marker {
+    background-color: #e6f7ff;
+    border-bottom: 1px dashed #1890ff;
+  }
+  .temp-highlight {
+    background-color: #ffeb3b !important;
+  }
+
+  /* review.css additional header styles */
+
+/* review.css */
+
+/* Header styles */
+header {
+    background-color: white;
+    border-bottom: 2px solid orange;
+    padding: 10px 20px;
+  }
+  
+  .header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .header-container h1 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #000;  /* Black title text */
+  }
+  
+  .search-box {
+    display: flex;
+    align-items: center;
+  }
+  
+  .search-box input[type="text"] {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+  }
+  
+  .search-button {
+    background: none;
+    border: none;
+    color: #000;  /* Black search icon text */
+    font-size: 1.2em;
+    margin-left: 5px;
+    cursor: pointer;
+  }
+  
+  /* Three-panel layout styling */
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+  
+  #container {
+    display: flex;
+    height: 100%;
+  }
+  
+  /* Left panel (TOC) */
+  #tocPanel {
+    width: 250px;
+    border-right: 1px solid #ccc;
+    padding: 10px;
+    overflow-y: auto;
+  }
+  
+  /* Set TOC link text to black */
+  #tocPanel a {
+    color: black;
+    text-decoration: none;
+    display: block;
+    margin: 4px 0;
+    cursor: pointer;
+  }
+  
+  #tocPanel a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Middle panel (Topic Area) */
+  #topicPanel {
+    flex: 2;
+    border-right: 1px solid #ccc;
+    padding: 10px;
+    overflow-y: auto;
+    position: relative;
+  }
+  
+  /* Right panel (Review Panel) */
+  #reviewPanel {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    background: #f9f9f9;
+  }
+  
+  /* Annotation styles */
+  .annotator-hl {
+    background-color: yellow;
+    cursor: pointer;
+  }
+  
+  .deleted-text {
+    text-decoration: line-through;
+    color: #999;
+  }
+  
+  .inserted-text {
+    color: blue;
+  }
+  
+  /* Context Menu */
+  #contextMenu {
+    display: none;
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+  }
+  
+  #contextMenu button {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+  
+  #contextMenu button:hover {
+    background: #f0f0f0;
+  }
+  
+  /* Review Panel Items */
+  #reviewList {
+    margin-bottom: 10px;
+  }
+  
+  .review-item {
+    margin: 10px 0;
+    padding: 10px;
+    background: white;
+    border-left: 3px solid #ddd;
+  }
+  
+  .review-item.comment {
+    border-color: #4CAF50;
+  }
+  
+  .review-item.deletion {
+    border-color: #f44336;
+  }
+  
+  .deletion-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  
+  .deletion-text {
+    color: #f44336;
+    font-style: italic;
+  }
+  
+  .comment-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+  }
+  
+  .comment-actions button {
+    padding: 2px 8px;
+    font-size: 0.9em;
+  }
+  
+  .replies {
+    margin-left: 20px;
+    border-left: 2px solid #ddd;
+    padding-left: 10px;
+  }
+  
+  .timestamp {
+    float: right;
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 2px;
+  }
+  
+  .text-highlight {
+    animation: highlight-fade 2s ease-out;
+  }
+  
+  @keyframes highlight-fade {
+    0% { background-color: #ffeb3b; }
+    100% { background-color: transparent; }
+  }
+  
+  /* Modal styles */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+    z-index: 1001;
+  }
+  
+  #overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+  }
+  
+  textarea, input[type="text"] {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+  }
+  
+  /* Comment options menu styling */
+  .comment-options-menu button {
+    display: block;
+    width: 100%;
+    padding: 5px;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  
+  .comment-options-menu button:hover {
+    background: #f0f0f0;
+  }
+  
+  /* Marker styling for commented text */
+  .comment-marker {
+    background-color: #e6f7ff;
+    border-bottom: 1px dashed #1890ff;
+  }
+  
+  .temp-highlight {
+    background-color: #ffeb3b !important;
+  }
+
+
+  
+  /* Decrease indentation for nested TOC items but preserve bullet icons */
+#tocPanel ul {
+    margin-left: 5px;    /* Reduced left margin */
+    padding-left: 20px;  /* Adjusted padding to allow space for bullet icons */
+  }
+  
+  #tocPanel li {
+    margin-left: 0;
+    /* Ensure you do NOT set list-style: none; so the bullets remain visible */
+  }
+  
+  /* Toggle icon for expand/collapse in TOC */
+/* Toggle icon for expand/collapse in TOC */
+.toggle-icon {
+    cursor: pointer;
+    margin-right: 5px;
+    font-size: 0.8em;
+  }
+
+  .review-item:hover {
+    background-color: #fdf7e3;  /* A light, warm highlight color */
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+  }
+  
+  /* Temporary highlight for topic markers when a review item is hovered */
+.temp-highlight {
+    background-color: #ffeb3b !important;
+    transition: background-color 0.3s ease;
+  }
+/* Style for the username in the review item */
+.author .username {
+    font-size: 1em;
+    font-weight: bold;
+    color: #333;
+  }
+  
+  /* Style for the timestamp in the review item */
+  .author .timestamp {
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 4px;  /* Spacing between username and timestamp */
+  }
+  
+  /* (Optional) You can add a little margin on the bottom of the author block if desired */
+  .author {
+    margin-bottom: 8px;
+  }
+    

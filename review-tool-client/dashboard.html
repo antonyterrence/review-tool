@@ -58,7 +58,7 @@
       color: #555;
       margin-top: 5px;
     }
-    /* New controls for version management */
+    /* Version controls styling */
     .version-controls {
       margin-top: 10px;
       display: flex;
@@ -98,113 +98,114 @@
   <input type="file" id="newVersionFile" accept=".zip" style="display:none;">
 
   <script>
-    /*********************************************
-     * Dashboard Page Script
-     *********************************************/
+    // Dashboard Page Script
+
     // Assume currentUser and currentRole are stored in localStorage after login.
     let currentUser = localStorage.getItem("currentUser") || "writer1";
     let currentRole = localStorage.getItem("currentRole") || "writer";
     localStorage.setItem("currentUser", currentUser);
     localStorage.setItem("currentRole", currentRole);
 
-    // Show upload section only if the current user is a writer.
+    // Show upload section only for writers.
     if (currentRole === "writer") {
       document.getElementById("uploadSection").style.display = "block";
     }
 
-    // Document records are stored in localStorage under "allDocuments".
-    // Each document record has the structure:
-    // {
-    //   docId: <docId>,
-    //   uploader: <user>,
-    //   reviewers: [ ... ],
-    //   versions: [
-    //      { webhelpId, version, title, subFolder, status }
-    //   ]
-    // }
-    function getAllDocuments() {
-      return JSON.parse(localStorage.getItem("allDocuments") || "[]");
+    // Use server endpoints for document records.
+    function loadDocuments() {
+      return fetch("/getDocuments").then(response => response.json());
     }
-    function saveAllDocuments(docs) {
-      localStorage.setItem("allDocuments", JSON.stringify(docs));
+    function saveDocument(doc) {
+      return fetch("/saveDocument", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(doc)
+      }).then(response => response.json());
+    }
+    function updateDocument(docId, newVersion) {
+      return fetch("/updateDocument", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docId, newVersion })
+      }).then(response => response.json());
     }
 
-    // Render the document list on the dashboard.
+    // Render the document list.
     function renderDashboard() {
-      const docListDiv = document.getElementById("docList");
-      docListDiv.innerHTML = "";
-      const allDocs = getAllDocuments();
-      let filteredDocs = [];
-      if (currentRole === "writer") {
-        filteredDocs = allDocs.filter(doc => doc.uploader === currentUser);
-      } else if (currentRole === "reviewer") {
-        filteredDocs = allDocs.filter(doc => doc.reviewers.indexOf(currentUser) !== -1);
-      }
-      if (filteredDocs.length === 0) {
-        docListDiv.innerHTML = "<p>No documents available.</p>";
-        return;
-      }
-      filteredDocs.forEach(doc => {
-        // Fallback: if versions missing, create one from available properties.
-        if (!doc.versions || !doc.versions.length) {
-          doc.versions = [{
-            webhelpId: doc.webhelpId || doc.docId,
-            version: doc.version || "v1",
-            title: doc.title || "Untitled Document",
-            subFolder: doc.subFolder || "",
-            status: doc.status || "Under Review"
-          }];
+      loadDocuments().then(allDocs => {
+        const docListDiv = document.getElementById("docList");
+        docListDiv.innerHTML = "";
+        let filteredDocs = [];
+        if (currentRole === "writer") {
+          filteredDocs = allDocs.filter(doc => doc.uploader === currentUser);
+        } else if (currentRole === "reviewer") {
+          filteredDocs = allDocs.filter(doc => doc.reviewers.indexOf(currentUser) !== -1);
         }
-        const latest = doc.versions[doc.versions.length - 1];
-        const docDiv = document.createElement("div");
-        docDiv.className = "docItem";
-        const docLink = document.createElement("a");
-        docLink.textContent = latest.title || `Document ${latest.webhelpId}`;
-        // Clicking the title redirects to review page using parameters from the selected version.
-        docLink.href = `review.html?webhelpId=${latest.webhelpId}&version=${latest.version}&subFolder=${encodeURIComponent(latest.subFolder)}`;
-        docDiv.appendChild(docLink);
-        const details = document.createElement("div");
-        details.className = "docDetails";
-        details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${latest.status}`;
-        docDiv.appendChild(details);
-
-        // Version controls: dropdown and "Upload New Version" button.
-        const versionControls = document.createElement("div");
-        versionControls.className = "version-controls";
-        const versionSelect = document.createElement("select");
-        doc.versions.forEach((ver, idx) => {
-          const opt = document.createElement("option");
-          // Use the version string (e.g., "v1", "v2") as value.
-          opt.value = ver.version;
-          // Display just the number (strip "v").
-          opt.textContent = ver.version.replace("v", "");
-          // If this is the latest version, mark it as selected.
-          if (ver.version === latest.version) {
-            opt.selected = true;
+        if (filteredDocs.length === 0) {
+          docListDiv.innerHTML = "<p>No documents available.</p>";
+          return;
+        }
+        filteredDocs.forEach(doc => {
+          // Ensure versions array exists.
+          if (!doc.versions || !doc.versions.length) {
+            doc.versions = [{
+              webhelpId: doc.webhelpId || doc.docId,
+              version: doc.version || "v1",
+              title: doc.title || "Untitled Document",
+              subFolder: doc.subFolder || "",
+              status: doc.status || "Under Review"
+            }];
           }
-          versionSelect.appendChild(opt);
-        });
-        versionSelect.addEventListener("change", () => {
-          const selectedVersion = doc.versions.find(ver => ver.version === versionSelect.value);
-          if (selectedVersion) {
-            docLink.href = `review.html?webhelpId=${selectedVersion.webhelpId}&version=${selectedVersion.version}&subFolder=${encodeURIComponent(selectedVersion.subFolder)}`;
-            details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${selectedVersion.status}`;
-          }
-        });
-        const uploadBtn = document.createElement("button");
-        uploadBtn.textContent = "Upload New Version";
-        uploadBtn.addEventListener("click", () => {
-          const fileInput = document.getElementById("newVersionFile");
-          // Set the docId in the file input so the server knows this is a version update.
-          fileInput.dataset.docId = doc.docId;
-          fileInput.dataset.currentVersions = JSON.stringify(doc.versions);
-          fileInput.click();
-        });
-        versionControls.appendChild(versionSelect);
-        versionControls.appendChild(uploadBtn);
-        docDiv.appendChild(versionControls);
+          const latest = doc.versions[doc.versions.length - 1];
+          const docDiv = document.createElement("div");
+          docDiv.className = "docItem";
+          const docLink = document.createElement("a");
+          docLink.textContent = latest.title || `Document ${latest.webhelpId}`;
+          // Clicking the title redirects to review page using parameters from the selected version.
+          docLink.href = `review.html?webhelpId=${latest.webhelpId}&version=${latest.version}&subFolder=${encodeURIComponent(latest.subFolder)}`;
+          docDiv.appendChild(docLink);
+          const details = document.createElement("div");
+          details.className = "docDetails";
+          details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${latest.status}`;
+          docDiv.appendChild(details);
 
-        docListDiv.appendChild(docDiv);
+          // Version controls: dropdown and "Upload New Version" button.
+          const versionControls = document.createElement("div");
+          versionControls.className = "version-controls";
+          const versionSelect = document.createElement("select");
+          doc.versions.forEach((ver) => {
+            const opt = document.createElement("option");
+            // Use the version number (strip the "v" prefix).
+            opt.value = ver.version;
+            opt.textContent = ver.version.replace("v", "");
+            if (ver.version === latest.version) {
+              opt.selected = true;
+            }
+            versionSelect.appendChild(opt);
+          });
+          versionSelect.addEventListener("change", () => {
+            const selectedVersion = doc.versions.find(ver => ver.version === versionSelect.value);
+            if (selectedVersion) {
+              docLink.href = `review.html?webhelpId=${selectedVersion.webhelpId}&version=${selectedVersion.version}&subFolder=${encodeURIComponent(selectedVersion.subFolder)}`;
+              details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${selectedVersion.status}`;
+            }
+          });
+          const uploadBtn = document.createElement("button");
+          uploadBtn.textContent = "Upload New Version";
+          uploadBtn.addEventListener("click", () => {
+            const fileInput = document.getElementById("newVersionFile");
+            fileInput.dataset.docId = doc.docId;
+            fileInput.dataset.currentVersions = JSON.stringify(doc.versions);
+            fileInput.click();
+          });
+          versionControls.appendChild(versionSelect);
+          versionControls.appendChild(uploadBtn);
+          docDiv.appendChild(versionControls);
+
+          docListDiv.appendChild(docDiv);
+        });
+      }).catch(err => {
+        console.error("Error loading documents:", err);
       });
     }
 
@@ -240,7 +241,7 @@
             alert("Upload successful!\n" +
                   "Document Title: " + data.title + "\n" +
                   "Document ID: " + data.webhelpId + ", Version: " + data.version);
-            // Create a new document record with a versions array.
+            // Create a new document record.
             const newDoc = {
               docId: data.webhelpId,
               uploader: currentUser,
@@ -249,11 +250,18 @@
                 { webhelpId: data.webhelpId, version: data.version, title: data.title, subFolder: data.subFolder, status: "Under Review" }
               ]
             };
-            let allDocs = getAllDocuments();
-            allDocs.push(newDoc);
-            saveAllDocuments(allDocs);
-            renderDashboard();
-            uploadForm.reset();
+            fetch("/saveDocument", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(newDoc)
+            })
+            .then(() => {
+              renderDashboard();
+              uploadForm.reset();
+            })
+            .catch(err => {
+              console.error("Error saving document record:", err);
+            });
           })
           .catch(error => {
             console.error("Error uploading file:", error);
@@ -267,40 +275,53 @@
       const file = event.target.files[0];
       if (!file) return;
       const docId = event.target.dataset.docId;
-      let allDocs = getAllDocuments();
-      const docIndex = allDocs.findIndex(doc => doc.docId === docId);
-      if (docIndex === -1) {
-        alert("Document record not found.");
-        return;
-      }
-      const formData = new FormData();
-      formData.append("webhelpZip", file);
-      // Append the docId so the server knows this is a version update.
-      formData.append("docId", docId);
-      fetch("/uploadWebhelp", {
-        method: "POST",
-        body: formData,
-      })
+      fetch("/getDocuments")
         .then(response => response.json())
-        .then(data => {
-          alert("New version upload successful!\n" +
-                "Document Title: " + data.title + "\n" +
-                "Document ID: " + data.webhelpId + ", Version: " + data.version);
-          const newVersion = { 
-            webhelpId: data.webhelpId, 
-            version: data.version, 
-            title: data.title, 
-            subFolder: data.subFolder, 
-            status: "Under Review" 
-          };
-          allDocs[docIndex].versions.push(newVersion);
-          saveAllDocuments(allDocs);
-          renderDashboard();
-          event.target.value = "";
+        .then(docs => {
+          const doc = docs.find(d => d.docId === docId);
+          if (!doc) {
+            alert("Document record not found.");
+            return;
+          }
+          const formData = new FormData();
+          formData.append("webhelpZip", file);
+          formData.append("docId", docId);
+          fetch("/uploadWebhelp", {
+            method: "POST",
+            body: formData,
+          })
+            .then(response => response.json())
+            .then(data => {
+              alert("New version upload successful!\n" +
+                    "Document Title: " + data.title + "\n" +
+                    "Document ID: " + data.webhelpId + ", Version: " + data.version);
+              const newVersion = { 
+                webhelpId: data.webhelpId, 
+                version: data.version, 
+                title: data.title, 
+                subFolder: data.subFolder, 
+                status: "Under Review" 
+              };
+              fetch("/updateDocument", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ docId, newVersion })
+              })
+              .then(() => {
+                renderDashboard();
+                event.target.value = "";
+              })
+              .catch(err => {
+                console.error("Error updating document record:", err);
+              });
+            })
+            .catch(error => {
+              console.error("Error uploading new version:", error);
+              alert("Error uploading new version.");
+            });
         })
-        .catch(error => {
-          console.error("Error uploading new version:", error);
-          alert("Error uploading new version.");
+        .catch(err => {
+          console.error("Error fetching documents:", err);
         });
     });
   </script>

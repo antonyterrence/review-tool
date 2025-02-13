@@ -29,7 +29,7 @@ if (!webhelpId || !version || !subFolder) {
       const tocList = document.getElementById("tocList");
       tocList.innerHTML = "";
       // Extract nested TOC from <nav><ul class="map bookmap">
-      const tocElement = tempDiv.querySelector("nav ul.map.bookmap");
+      const tocElement = tempDiv.querySelector("nav ul.map");
       if (tocElement) {
         tocList.innerHTML = tocElement.outerHTML;
         const tocLinks = tocList.querySelectorAll("a");

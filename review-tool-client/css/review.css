@@ -45,12 +45,12 @@ html, body {
   }
   /* Annotation styles */
   .annotator-hl {
-    background-color: yellow;
+    background-color: rgb(238, 242, 122);
     cursor: pointer;
   }
   .deleted-text {
     text-decoration: line-through;
-    color: #999;
+    color: #ef0d0d;
   }
   .inserted-text {
     color: blue;
@@ -270,16 +270,7 @@ header {
     background: #f9f9f9;
   }
   
-  /* Annotation styles */
-  .annotator-hl {
-    background-color: yellow;
-    cursor: pointer;
-  }
-  
-  .deleted-text {
-    text-decoration: line-through;
-    color: #999;
-  }
+
   
   .inserted-text {
     color: blue;

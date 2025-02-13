@@ -1,7 +1,5 @@
 *.html
-review-tool-server/webhelps/*/**
 review-tool-server/uploads/**
-annotations.json
 node_modules/**
 package-lock.json
 uploads/**

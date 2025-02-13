@@ -8,9 +8,129 @@ const subFolder = params.get("subFolder");
 // Retrieve current topic from localStorage; default to "default".
 let currentTopic = localStorage.getItem("currentTopic") || "default";
 
-/***************************************
+/************************************************
+ * Advanced Serialization Helper Functions
+ ************************************************/
+/**
+ * Returns an XPath for a given node relative to a root element.
+ * It builds a path by counting the node’s position among siblings.
+ */
+function getXPathForNode(node, root) {
+  if (node === root) return ".";
+  let parts = [];
+  while (node && node !== root) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      // For text nodes, use 'text()' with an index.
+      let index = 1;
+      let sibling = node.previousSibling;
+      while (sibling) {
+        if (sibling.nodeType === Node.TEXT_NODE) {
+          index++;
+        }
+        sibling = sibling.previousSibling;
+      }
+      parts.unshift(`text()[${index}]`);
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      let index = 1;
+      let sibling = node.previousSibling;
+      while (sibling) {
+        if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === node.nodeName) {
+          index++;
+        }
+        sibling = sibling.previousSibling;
+      }
+      parts.unshift(node.nodeName.toLowerCase() + `[${index}]`);
+    }
+    node = node.parentNode;
+  }
+  return "./" + parts.join("/");
+}
+
+/**
+ * Returns the first node that matches the given XPath relative to the root.
+ */
+function getNodeByXPath(xpath, root) {
+  let evaluator = new XPathEvaluator();
+  let result = evaluator.evaluate(xpath, root, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+  return result.singleNodeValue;
+}
+
+/**
+ * Advanced serialization:
+ * - If the range’s common ancestor is an ordered or unordered list (<ol> or <ul>)
+ *   and the selection spans complete <li> elements, then serialize the full outerHTML of those <li>s.
+ * - Otherwise, clone the range’s contents and store its HTML.
+ */
+function advancedSerializeRange(range) {
+  // Check if the commonAncestorContainer is a list and if the selection spans whole list items.
+  let commonAncestor = range.commonAncestorContainer;
+  if (commonAncestor.nodeType === Node.TEXT_NODE) {
+    commonAncestor = commonAncestor.parentNode;
+  }
+  if (commonAncestor && (commonAncestor.tagName === "OL" || commonAncestor.tagName === "UL")) {
+    // Get all li children that are fully contained in the range.
+    const liElements = Array.from(commonAncestor.getElementsByTagName("li")).filter(li => {
+      // We require that the entire li is contained within the range.
+      let liRange = document.createRange();
+      liRange.selectNodeContents(li);
+      return range.compareBoundaryPoints(Range.START_TO_START, liRange) <= 0 &&
+             range.compareBoundaryPoints(Range.END_TO_END, liRange) >= 0;
+    });
+    if (liElements.length > 0) {
+      const container = document.createElement("div");
+      liElements.forEach(li => container.innerHTML += li.outerHTML);
+      return {
+        startXPath: getXPathForNode(liElements[0], topicContent),
+        startOffset: 0,
+        endXPath: getXPathForNode(liElements[liElements.length - 1], topicContent),
+        endOffset: liElements[liElements.length - 1].outerHTML.length,
+        html: container.innerHTML
+      };
+    }
+  }
+  // Default: clone the range contents.
+  const frag = range.cloneContents();
+  const div = document.createElement("div");
+  div.appendChild(frag);
+  return {
+    startXPath: getXPathForNode(range.startContainer, topicContent),
+    startOffset: range.startOffset,
+    endXPath: getXPathForNode(range.endContainer, topicContent),
+    endOffset: range.endOffset,
+    html: div.innerHTML
+  };
+}
+
+/**
+ * Advanced deserialization:
+ * Recreates a Range from the stored XPath boundaries.
+ */
+function advancedDeserializeRange(serialized) {
+  const startNode = getNodeByXPath(serialized.startXPath, topicContent);
+  const endNode = getNodeByXPath(serialized.endXPath, topicContent);
+  if (!startNode || !endNode) return null;
+  const range = document.createRange();
+  try {
+    range.setStart(startNode, serialized.startOffset);
+    range.setEnd(endNode, serialized.endOffset);
+  } catch (e) {
+    console.error("Error deserializing range:", e);
+    return null;
+  }
+  return range;
+}
+
+/* Use the advanced serialization functions */
+function serializeRange(range) {
+  return advancedSerializeRange(range);
+}
+function deserializeRange(serialized) {
+  return advancedDeserializeRange(serialized);
+}
+
+/************************************************
  * TOC & Topic Loading
- ***************************************/
+ ************************************************/
 if (!webhelpId || !version || !subFolder) {
   document.getElementById("tocList").innerHTML = "<p>Missing document parameters.</p>";
   document.getElementById("topicContent").innerHTML = "<p>Cannot load document.</p>";
@@ -28,7 +148,6 @@ if (!webhelpId || !version || !subFolder) {
       tempDiv.innerHTML = html;
       const tocList = document.getElementById("tocList");
       tocList.innerHTML = "";
-      // Extract nested TOC from <nav><ul class="map bookmap">
       const tocElement = tempDiv.querySelector("nav ul.map");
       if (tocElement) {
         tocList.innerHTML = tocElement.outerHTML;
@@ -36,7 +155,6 @@ if (!webhelpId || !version || !subFolder) {
         tocLinks.forEach(link => {
           link.addEventListener("click", function(event) {
             event.preventDefault();
-            // Use the href (without ".html") as the topic identifier.
             let href = this.getAttribute("href");
             currentTopic = href.replace('.html','');
             localStorage.setItem("currentTopic", currentTopic);
@@ -60,7 +178,6 @@ if (!webhelpId || !version || !subFolder) {
           });
         });
         if (tocLinks.length > 0) {
-          // If a topic was previously saved, try to click that link; otherwise, click the first.
           let found = false;
           tocLinks.forEach(link => {
             if (link.getAttribute("href").replace('.html','') === currentTopic) {
@@ -73,7 +190,6 @@ if (!webhelpId || !version || !subFolder) {
           }
         }
       } else {
-        // Fallback: Build TOC from all <h2> headings.
         const headings = tempDiv.querySelectorAll("h2");
         if (headings.length === 0) {
           tocList.innerHTML = "<p>No TOC found.</p>";
@@ -118,7 +234,6 @@ if (!webhelpId || !version || !subFolder) {
     });
 }
 
-// Override default behavior of links within topic content so they load via AJAX.
 function overrideTopicLinks() {
   const topicDiv = document.getElementById("topicContent");
   const links = topicDiv.querySelectorAll("a");
@@ -148,9 +263,9 @@ function overrideTopicLinks() {
   });
 }
 
-/******************************************************
+/************************************************
  * Annotation, Context Menu, and Review Panel Features
- ******************************************************/
+ ************************************************/
 const topicContent = document.getElementById("topicContent");
 const contextMenu = document.getElementById("contextMenu");
 const overlay = document.getElementById("overlay");
@@ -162,61 +277,21 @@ const annotationMap = new Map();
 const currentUserAnnotation = localStorage.getItem("currentUser") || "User1";
 let reviewItems = [];
 
-// --- Range Serialization Functions ---
-function serializeRange(range) {
-  const fullText = topicContent.textContent;
-  const text = range.toString();
-  const startOffset = fullText.indexOf(text);
-  const endOffset = startOffset + text.length;
-  return { text, startOffset, endOffset };
-}
-function deserializeRange(serialized) {
-  const fullText = topicContent.textContent;
-  const { text, startOffset, endOffset } = serialized;
-  if (fullText.substring(startOffset, endOffset) !== text) return null;
-  const range = document.createRange();
-  let charCount = 0, startNode, endNode;
-  const treeWalker = document.createTreeWalker(topicContent, NodeFilter.SHOW_TEXT);
-  while (treeWalker.nextNode()) {
-    const node = treeWalker.currentNode;
-    const nodeLength = node.textContent.length;
-    if (charCount + nodeLength >= startOffset) {
-      startNode = node;
-      break;
-    }
-    charCount += nodeLength;
-  }
-  charCount = 0;
-  treeWalker.currentNode = topicContent;
-  while (treeWalker.nextNode()) {
-    const node = treeWalker.currentNode;
-    const nodeLength = node.textContent.length;
-    if (charCount + nodeLength >= endOffset) {
-      endNode = node;
-      break;
-    }
-    charCount += nodeLength;
-  }
-  if (!startNode || !endNode) return null;
-  range.setStart(startNode, startOffset - charCount);
-  range.setEnd(endNode, endOffset - charCount);
-  return range;
-}
-
-// Helper to check if an element is a heading.
+/* Helper to check if an element is a heading */
 function isHeadingElement(elem) {
   return elem && elem.tagName && /^H[1-6]$/.test(elem.tagName);
 }
 
-// --- Reapply a comment marker based on stored range ---
+/* Reapply a comment marker using advanced serialization */
 function reapplyCommentMarker(annotation) {
   if (!annotation.range) return;
-  const range = deserializeRange(annotation.range);
+  const range = advancedDeserializeRange(annotation.range);
   if (range) {
     const marker = document.createElement("span");
     marker.className = "comment-marker";
     marker.dataset.commentId = annotation.id;
-    marker.textContent = range.toString();
+    // Use the stored HTML for the comment (if available) to preserve formatting.
+    marker.innerHTML = annotation.range.html || range.toString();
     try {
       range.surroundContents(marker);
       annotationMap.set(annotation.id, marker);
@@ -226,89 +301,70 @@ function reapplyCommentMarker(annotation) {
   }
 }
 
-// --- Reapply a deletion marker based on stored range ---
+/* Reapply a deletion marker using advanced serialization */
 function reapplyDeletionMarker(annotation) {
   if (!annotation.range) return;
-  const range = deserializeRange(annotation.range);
+  const range = advancedDeserializeRange(annotation.range);
   if (!range) return;
-  const parent = range.startContainer.parentNode;
-  if (isHeadingElement(parent)) {
-    parent.innerHTML = parent.innerHTML.replace(annotation.deletedText, `<span class="deleted-text" data-deletion-id="${annotation.id}">${annotation.deletedText}</span>`);
-  } else {
-    const marker = document.createElement("span");
-    marker.className = "deleted-text";
-    marker.dataset.deletionId = annotation.id;
-    marker.textContent = annotation.deletedText;
-    try {
-      range.deleteContents();
-      range.insertNode(marker);
-    } catch (e) {
-      console.error("Error reapplying deletion marker:", e);
-    }
+  const marker = document.createElement("span");
+  marker.className = "deleted-text";
+  marker.dataset.deletionId = annotation.id;
+  marker.innerHTML = annotation.deletedHtml || annotation.deletedText;
+  try {
+    range.deleteContents();
+    range.insertNode(marker);
+  } catch (e) {
+    console.error("Error reapplying deletion marker:", e);
   }
 }
 
-// --- Reapply a highlight marker based on stored range ---
+/* Reapply a highlight marker using advanced serialization */
 function reapplyHighlightMarker(annotation) {
   if (!annotation.range) return;
-  const range = deserializeRange(annotation.range);
+  const range = advancedDeserializeRange(annotation.range);
   if (!range) return;
-  const parent = range.startContainer.parentNode;
-  const hlText = annotation.highlightedText || range.toString();
-  if (isHeadingElement(parent)) {
-    parent.innerHTML = parent.innerHTML.replace(hlText, `<span class="annotator-hl" data-highlight-id="${annotation.id}">${hlText}</span>`);
-  } else {
-    const marker = document.createElement("span");
-    marker.className = "annotator-hl";
-    marker.dataset.highlightId = annotation.id;
-    marker.textContent = hlText;
-    try {
-      range.deleteContents();
-      range.insertNode(marker);
-    } catch (e) {
-      console.error("Error reapplying highlight marker:", e);
-    }
+  const marker = document.createElement("span");
+  marker.className = "annotator-hl";
+  marker.dataset.highlightId = annotation.id;
+  marker.innerHTML = annotation.highlightedHtml || annotation.highlightedText || range.toString();
+  try {
+    range.deleteContents();
+    range.insertNode(marker);
+  } catch (e) {
+    console.error("Error reapplying highlight marker:", e);
   }
 }
 
-// --- Reapply a replacement marker based on stored range ---
+/* Reapply a replacement marker using advanced serialization */
 function reapplyReplacementMarker(annotation) {
   if (!annotation.range) return;
-  const range = deserializeRange(annotation.range);
+  const range = advancedDeserializeRange(annotation.range);
   if (!range) return;
-  const parent = range.startContainer.parentNode;
-  if (isHeadingElement(parent)) {
-    // Replace oldText with formatted version in the heading.
-    parent.innerHTML = parent.innerHTML.replace(annotation.oldText, `<span class="deleted-text" data-deletion-id="${annotation.id}">${annotation.oldText}</span> <span class="inserted-text">${annotation.newText}</span>`);
-  } else {
-    const deletedSpan = document.createElement("span");
-    deletedSpan.className = "deleted-text";
-    deletedSpan.dataset.deletionId = annotation.id;
-    deletedSpan.textContent = annotation.oldText;
-    const insertedSpan = document.createElement("span");
-    insertedSpan.className = "inserted-text";
-    insertedSpan.textContent = annotation.newText;
-    try {
-      range.deleteContents();
-      range.insertNode(deletedSpan);
-      range.insertNode(document.createTextNode(" "));
-      range.insertNode(insertedSpan);
-    } catch (e) {
-      console.error("Error reapplying replacement marker:", e);
-    }
+  const deletedSpan = document.createElement("span");
+  deletedSpan.className = "deleted-text";
+  deletedSpan.dataset.deletionId = annotation.id;
+  deletedSpan.innerHTML = annotation.oldHtml || annotation.oldText;
+  const insertedSpan = document.createElement("span");
+  insertedSpan.className = "inserted-text";
+  insertedSpan.textContent = annotation.newText;
+  try {
+    range.deleteContents();
+    range.insertNode(deletedSpan);
+    range.insertNode(document.createTextNode(" "));
+    range.insertNode(insertedSpan);
+  } catch (e) {
+    console.error("Error reapplying replacement marker:", e);
   }
 }
 
-// --- Load annotations from the server for the current topic ---
+/* Load annotations from the server for the current topic */
 function loadAnnotationsFromServer(topic) {
   if (!topic) topic = "default";
   currentTopic = topic;
   localStorage.setItem("currentTopic", currentTopic);
-  // Use encodeURIComponent in case the topic contains slashes.
   fetch(`/getReviewChanges/${webhelpId}/${version}/${encodeURIComponent(topic)}`)
     .then(response => response.json())
     .then(flatAnnotations => {
-      // Build a nested structure from the flat array.
       const annotationsMap = {};
       flatAnnotations.forEach(a => {
         annotationsMap[a.id] = a;
@@ -359,7 +415,7 @@ window.addEventListener("load", () => {
   loadAnnotationsFromServer(currentTopic);
 });
 
-// --- Listen for text selection in topicContent ---
+// Listen for text selection in topicContent.
 topicContent.addEventListener('mouseup', (event) => {
   const selection = window.getSelection();
   if (selection.toString().trim() && topicContent.contains(selection.anchorNode)) {
@@ -376,7 +432,7 @@ document.addEventListener('mousedown', (event) => {
   }
 });
 
-// --- Create a review item for the review panel ---
+/* Create a review item for the review panel */
 function createReviewItem(type, data) {
   const item = document.createElement('div');
   item.className = `review-item ${type}`;
@@ -403,7 +459,7 @@ function createReviewItem(type, data) {
           <strong>${data.user}</strong>
           <small>${data.timestamp}</small>
         </div>
-        <div class="deletion-text">Deleted: ${data.deletedText}</div>
+        <div class="deletion-text">Deleted: ${data.deletedText || data.deletedHtml || ""}</div>
       `;
       break;
     case 'highlight':
@@ -413,7 +469,7 @@ function createReviewItem(type, data) {
           <small>${data.timestamp}</small>
         </div>
         <div class="replacement-content">
-          Highlighted: <span class="text-highlight">${data.highlightedText}</span>
+          Highlighted: <span class="text-highlight">${data.highlightedText || data.highlightedHtml || ""}</span>
         </div>
       `;
       break;
@@ -424,7 +480,7 @@ function createReviewItem(type, data) {
           <small>${data.timestamp}</small>
         </div>
         <div class="replacement-content">
-          <div>Replaced: <span class="deleted-text">${data.oldText}</span></div>
+          <div>Replaced: <span class="deleted-text">${data.oldText || data.oldHtml || ""}</span></div>
           <div>With: <span class="replacement-text">${data.newText}</span></div>
         </div>
       `;
@@ -434,11 +490,13 @@ function createReviewItem(type, data) {
 }
 
 // --- Submit Comment Handler ---
+// (For comments we now use basic text serialization to avoid interfering with DOM structure.)
 document.getElementById('submitComment').addEventListener('click', () => {
   const text = document.getElementById('commentText').value.trim();
   if (text && selectedRange) {
     const commentId = Date.now().toString();
-    const serialized = serializeRange(selectedRange.cloneRange());
+    // Use advanced serialization so that the comment range includes XPath info.
+    const serialized = advancedSerializeRange(selectedRange.cloneRange());
     const comment = {
       id: commentId,
       type: 'comment',
@@ -450,30 +508,19 @@ document.getElementById('submitComment').addEventListener('click', () => {
     const commentSpan = document.createElement("span");
     commentSpan.className = "comment-marker";
     commentSpan.dataset.commentId = commentId;
-    commentSpan.textContent = selectedText;
+    // Use the serialized HTML fragment so that formatting is preserved.
+    commentSpan.innerHTML = serialized.html;
     selectedRange.deleteContents();
     selectedRange.insertNode(commentSpan);
     annotationMap.set(commentId, commentSpan);
-    const reviewItem = document.createElement('div');
-    reviewItem.className = "review-item comment";
-    reviewItem.dataset.itemId = commentId;
-    reviewItem.dataset.type = 'comment';
-    reviewItem.innerHTML = `
-      <div class="author">
-        ${comment.user} <span class="timestamp">${comment.timestamp}</span> <button class="ellipsis-btn">⋮</button>
-      </div>
-      <div class="text">${comment.text}</div>
-      <div class="comment-actions">
-        <button class="reply-btn">Reply</button>
-      </div>
-      <div class="replies"></div>
-    `;
+    const reviewItem = createReviewItem('comment', comment);
     document.getElementById('reviewList').appendChild(reviewItem);
     reviewItems.push(comment);
     saveAnnotationToServer(comment, currentTopic);
     closeModals();
   }
 });
+
 
 // --- Submit Reply Handler ---
 document.getElementById('submitReply').addEventListener('click', () => {
@@ -523,17 +570,19 @@ document.getElementById('replaceCancel').addEventListener('click', closeModals);
 // --- Highlight Functionality ---
 document.getElementById('highlightButton').addEventListener('click', () => {
   if (selectedRange) {
+    const highlightId = Date.now().toString();
+    const serialized = advancedSerializeRange(selectedRange.cloneRange());
     const highlight = {
-      id: Date.now().toString(),
+      id: highlightId,
       type: 'highlight',
       user: currentUserAnnotation,
-      highlightedText: selectedText,
+      highlightedHtml: serialized.html,
       timestamp: new Date().toLocaleString(),
-      range: serializeRange(selectedRange.cloneRange())
+      range: serialized
     };
     const span = document.createElement('span');
     span.className = 'annotator-hl';
-    span.textContent = selectedText;
+    span.innerHTML = serialized.html;
     selectedRange.deleteContents();
     selectedRange.insertNode(span);
     const item = createReviewItem('highlight', highlight);
@@ -548,17 +597,19 @@ document.getElementById('highlightButton').addEventListener('click', () => {
 // --- Delete Functionality ---
 document.getElementById('deleteButton').addEventListener('click', () => {
   if (selectedRange) {
+    const deletionId = Date.now().toString();
+    const serialized = advancedSerializeRange(selectedRange.cloneRange());
     const deletion = {
-      id: Date.now().toString(),
+      id: deletionId,
       type: 'deletion',
       user: currentUserAnnotation,
-      deletedText: selectedText,
+      deletedHtml: serialized.html,
       timestamp: new Date().toLocaleString(),
-      range: serializeRange(selectedRange.cloneRange())
+      range: serialized
     };
     const span = document.createElement('span');
     span.className = 'deleted-text';
-    span.textContent = selectedText;
+    span.innerHTML = serialized.html;
     selectedRange.deleteContents();
     selectedRange.insertNode(span);
     const item = createReviewItem('deletion', deletion);
@@ -567,6 +618,41 @@ document.getElementById('deleteButton').addEventListener('click', () => {
     annotationMap.set(deletion.id, deletion.range);
     contextMenu.style.display = 'none';
     saveAnnotationToServer(deletion, currentTopic);
+  }
+});
+
+// --- Replace Functionality ---
+document.getElementById('replaceConfirm').addEventListener('click', () => {
+  const newText = document.getElementById('replaceTo').value.trim();
+  if (newText && selectedRange) {
+    const replacementId = Date.now().toString();
+    const serialized = advancedSerializeRange(selectedRange.cloneRange());
+    const replacement = {
+      id: replacementId,
+      type: 'replacement',
+      user: currentUserAnnotation,
+      oldHtml: serialized.html,
+      newText: newText,
+      timestamp: new Date().toLocaleString(),
+      range: serialized
+    };
+    const deletedSpan = document.createElement('span');
+    deletedSpan.className = 'deleted-text';
+    deletedSpan.dataset.deletionId = replacementId;
+    deletedSpan.innerHTML = serialized.html;
+    const insertedSpan = document.createElement('span');
+    insertedSpan.className = 'inserted-text';
+    insertedSpan.textContent = newText;
+    selectedRange.deleteContents();
+    selectedRange.insertNode(deletedSpan);
+    selectedRange.insertNode(document.createTextNode(' '));
+    selectedRange.insertNode(insertedSpan);
+    const item = createReviewItem('replacement', replacement);
+    document.getElementById('reviewList').appendChild(item);
+    reviewItems.push(replacement);
+    annotationMap.set(replacement.id, replacement.range);
+    closeModals();
+    saveAnnotationToServer(replacement, currentTopic);
   }
 });
 
@@ -597,7 +683,7 @@ document.getElementById('reviewList').addEventListener('click', (e) => {
   }
 });
 
-// --- Hover Effects: When hovering a review item of type deletion, highlight its marker in topic ---
+// --- Hover Effects: Highlight marker in topic when hovering deletion/replacement/highlight items ---
 document.getElementById('reviewList').addEventListener('mouseover', (e) => {
   const item = e.target.closest('.review-item');
   if (!item) return;
@@ -632,38 +718,6 @@ document.getElementById('commentButton').addEventListener('click', () => {
 document.getElementById('replaceButton').addEventListener('click', () => {
   document.getElementById('replaceFrom').value = selectedText;
   showModal('replaceModal');
-});
-
-// --- Replace Functionality ---
-document.getElementById('replaceConfirm').addEventListener('click', () => {
-  const newText = document.getElementById('replaceTo').value.trim();
-  if (newText && selectedRange) {
-    const replacement = {
-      id: Date.now().toString(),
-      type: 'replacement',
-      user: currentUserAnnotation,
-      oldText: selectedText,
-      newText: newText,
-      timestamp: new Date().toLocaleString(),
-      range: serializeRange(selectedRange.cloneRange())
-    };
-    const deletedSpan = document.createElement('span');
-    deletedSpan.className = 'deleted-text';
-    deletedSpan.textContent = selectedText;
-    const insertedSpan = document.createElement('span');
-    insertedSpan.className = 'inserted-text';
-    insertedSpan.textContent = newText;
-    selectedRange.deleteContents();
-    selectedRange.insertNode(deletedSpan);
-    selectedRange.insertNode(document.createTextNode(' '));
-    selectedRange.insertNode(insertedSpan);
-    const item = createReviewItem('replacement', replacement);
-    document.getElementById('reviewList').appendChild(item);
-    reviewItems.push(replacement);
-    annotationMap.set(replacement.id, replacement.range);
-    closeModals();
-    saveAnnotationToServer(replacement, currentTopic);
-  }
 });
 
 // --- Modal Handling Functions ---

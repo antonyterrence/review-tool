@@ -1,0 +1,30 @@
+{
+  "v1": {
+    "taskbook/installdb": [
+      {
+        "id": "1739456362313",
+        "type": "comment",
+        "user": "Antony Terrence",
+        "text": "test",
+        "timestamp": "13/02/2025, 19:49:22",
+        "range": {
+          "text": "Installing ",
+          "startOffset": 1,
+          "endOffset": 12
+        }
+      },
+      {
+        "id": "1739456367081",
+        "type": "deletion",
+        "user": "Antony Terrence",
+        "deletedText": "follow ",
+        "timestamp": "13/02/2025, 19:49:27",
+        "range": {
+          "text": "follow ",
+          "startOffset": 139,
+          "endOffset": 146
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "v1": {
+    "tasks/insertBattery": [
+      {
+        "id": "1739456653006",
+        "type": "deletion",
+        "user": "Antony Terrence",
+        "deletedText": "steps",
+        "timestamp": "13/02/2025, 19:54:13",
+        "range": {
+          "text": "steps",
+          "startOffset": 114,
+          "endOffset": 119
+        }
+      },
+      {
+        "id": "1739456657671",
+        "type": "comment",
+        "user": "Antony Terrence",
+        "text": "test",
+        "timestamp": "13/02/2025, 19:54:17",
+        "range": {
+          "text": "phone ",
+          "startOffset": 148,
+          "endOffset": 154
+        }
+      },
+      {
+        "id": "1739456701803",
+        "type": "replacement",
+        "user": "Terry",
+        "oldText": "turned ",
+        "newText": "test",
+        "timestamp": "13/02/2025, 19:55:01",
+        "range": {
+          "text": "turned\n",
+          "startOffset": 157,
+          "endOffset": 164
+        }
+      }
+    ]
+  }
+}

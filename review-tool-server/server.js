@@ -14,10 +14,16 @@ app.use(express.static(path.join(__dirname, '../review-tool-client')));
 // Configure multer for file uploads.
 const upload = multer({ dest: 'uploads/' });
 
-// --- Persistence: Store annotations in a separate file per document ---
+// --- Persistence: Store annotations in a separate file per document in an "annotations" folder ---
+// Ensure the annotations folder exists.
+const annotationsDir = path.join(__dirname, 'annotations');
+if (!fs.existsSync(annotationsDir)) {
+  fs.mkdirSync(annotationsDir);
+}
+
 // Helper: Get the annotations file path for a given document (webhelpId)
 function getAnnotationsFile(webhelpId) {
-  return path.join(__dirname, `annotations-${webhelpId}.json`);
+  return path.join(annotationsDir, `${webhelpId}.json`);
 }
 
 // Helper: Read annotations for a document from its JSON file.
@@ -37,10 +43,10 @@ function readAnnotations(webhelpId) {
 }
 
 // Helper: Write annotations for a document to its JSON file.
-function writeAnnotations(annotations, webhelpId) {
+function writeAnnotations(data, webhelpId) {
   const filePath = getAnnotationsFile(webhelpId);
   try {
-    fs.writeFileSync(filePath, JSON.stringify(annotations, null, 2), 'utf8');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
   } catch (err) {
     console.error("Error writing annotations file:", err);
   }
@@ -51,6 +57,7 @@ function writeAnnotations(annotations, webhelpId) {
  * Expects a form field "webhelpZip" (multipart/form-data).
  */
 app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
+  // Create a unique webhelp ID and initial version folder.
   const webhelpId = Date.now().toString();
   const version = 'v1';
   const targetDir = path.join(__dirname, 'webhelps', webhelpId, version);
@@ -74,12 +81,10 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
 
 /**
  * Endpoint: Serve a topic file.
- * URL: /webhelp/:webhelpId/:version/* 
- * The wildcard (*) represents the relative path to the topic HTML.
  */
 app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
-  const topicPath = req.params[0];
+  const topicPath = req.params[0]; // The remaining part of the URL.
   const filePath = path.join(__dirname, 'webhelps', webhelpId, version, topicPath);
   res.sendFile(filePath);
 });
@@ -91,7 +96,7 @@ app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
 app.post('/saveReviewChange', (req, res) => {
   const { webhelpId, version, topic, change } = req.body;
   console.log("Received annotation for:", webhelpId, version, topic, change);
-  // Read annotations for the specific document.
+  // Read annotations for this document.
   const annotations = readAnnotations(webhelpId);
   if (!annotations[version]) annotations[version] = {};
   if (!annotations[version][topic]) annotations[version][topic] = [];
@@ -102,8 +107,7 @@ app.post('/saveReviewChange', (req, res) => {
 
 /**
  * Endpoint: Retrieve review changes for a topic.
- * URL: /getReviewChanges/:webhelpId/:version/* 
- * The wildcard (*) represents the topic (URL‑encoded).
+ * The topic is captured as a wildcard (URL‑encoded).
  */
 app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;

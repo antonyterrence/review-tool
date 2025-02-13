@@ -1,6 +1,6 @@
 /************************************************
-     * Global Variables and Topic Identification
-     ************************************************/
+ * Global Variables and Topic Identification
+ ************************************************/
 const params = new URLSearchParams(window.location.search);
 const webhelpId = params.get("webhelpId");
 const version = params.get("version");
@@ -203,6 +203,11 @@ function deserializeRange(serialized) {
   return range;
 }
 
+// Helper to check if an element is a heading.
+function isHeadingElement(elem) {
+  return elem && elem.tagName && /^H[1-6]$/.test(elem.tagName);
+}
+
 // --- Reapply a comment marker based on stored range ---
 function reapplyCommentMarker(annotation) {
   if (!annotation.range) return;
@@ -225,9 +230,14 @@ function reapplyCommentMarker(annotation) {
 function reapplyDeletionMarker(annotation) {
   if (!annotation.range) return;
   const range = deserializeRange(annotation.range);
-  if (range) {
+  if (!range) return;
+  const parent = range.startContainer.parentNode;
+  if (isHeadingElement(parent)) {
+    parent.innerHTML = parent.innerHTML.replace(annotation.deletedText, `<span class="deleted-text" data-deletion-id="${annotation.id}">${annotation.deletedText}</span>`);
+  } else {
     const marker = document.createElement("span");
     marker.className = "deleted-text";
+    marker.dataset.deletionId = annotation.id;
     marker.textContent = annotation.deletedText;
     try {
       range.deleteContents();
@@ -242,10 +252,16 @@ function reapplyDeletionMarker(annotation) {
 function reapplyHighlightMarker(annotation) {
   if (!annotation.range) return;
   const range = deserializeRange(annotation.range);
-  if (range) {
+  if (!range) return;
+  const parent = range.startContainer.parentNode;
+  const hlText = annotation.highlightedText || range.toString();
+  if (isHeadingElement(parent)) {
+    parent.innerHTML = parent.innerHTML.replace(hlText, `<span class="annotator-hl" data-highlight-id="${annotation.id}">${hlText}</span>`);
+  } else {
     const marker = document.createElement("span");
     marker.className = "annotator-hl";
-    marker.textContent = annotation.highlightedText || range.toString();
+    marker.dataset.highlightId = annotation.id;
+    marker.textContent = hlText;
     try {
       range.deleteContents();
       range.insertNode(marker);
@@ -259,9 +275,15 @@ function reapplyHighlightMarker(annotation) {
 function reapplyReplacementMarker(annotation) {
   if (!annotation.range) return;
   const range = deserializeRange(annotation.range);
-  if (range) {
+  if (!range) return;
+  const parent = range.startContainer.parentNode;
+  if (isHeadingElement(parent)) {
+    // Replace oldText with formatted version in the heading.
+    parent.innerHTML = parent.innerHTML.replace(annotation.oldText, `<span class="deleted-text" data-deletion-id="${annotation.id}">${annotation.oldText}</span> <span class="inserted-text">${annotation.newText}</span>`);
+  } else {
     const deletedSpan = document.createElement("span");
     deletedSpan.className = "deleted-text";
+    deletedSpan.dataset.deletionId = annotation.id;
     deletedSpan.textContent = annotation.oldText;
     const insertedSpan = document.createElement("span");
     insertedSpan.className = "inserted-text";
@@ -362,19 +384,19 @@ function createReviewItem(type, data) {
   item.dataset.type = type;
   switch (type) {
     case 'comment':
-  item.innerHTML = `
-    <div class="author">
-      <div class="username">${data.user}</div>
-      <div class="timestamp">${data.timestamp}</div>
-      <button class="ellipsis-btn">⋮</button>
-    </div>
-    <div class="text">${data.text}</div>
-    <div class="comment-actions">
-      <button class="reply-btn">Reply</button>
-    </div>
-    <div class="replies"></div>
-  `;
-  break;
+      item.innerHTML = `
+        <div class="author">
+          <div class="username">${data.user}</div>
+          <div class="timestamp">${data.timestamp}</div>
+          <button class="ellipsis-btn">⋮</button>
+        </div>
+        <div class="text">${data.text}</div>
+        <div class="comment-actions">
+          <button class="reply-btn">Reply</button>
+        </div>
+        <div class="replies"></div>
+      `;
+      break;
     case 'deletion':
       item.innerHTML = `
         <div class="deletion-meta">
@@ -575,6 +597,32 @@ document.getElementById('reviewList').addEventListener('click', (e) => {
   }
 });
 
+// --- Hover Effects: When hovering a review item of type deletion, highlight its marker in topic ---
+document.getElementById('reviewList').addEventListener('mouseover', (e) => {
+  const item = e.target.closest('.review-item');
+  if (!item) return;
+  const type = item.dataset.type;
+  const id = item.dataset.itemId;
+  if (type === 'deletion' || type === 'replacement' || type === 'highlight') {
+    let marker = document.querySelector(`[data-deletion-id="${id}"]`) || document.querySelector(`[data-highlight-id="${id}"]`);
+    if (marker) {
+      marker.classList.add("temp-highlight");
+    }
+  }
+});
+document.getElementById('reviewList').addEventListener('mouseout', (e) => {
+  const item = e.target.closest('.review-item');
+  if (!item) return;
+  const type = item.dataset.type;
+  const id = item.dataset.itemId;
+  if (type === 'deletion' || type === 'replacement' || type === 'highlight') {
+    let marker = document.querySelector(`[data-deletion-id="${id}"]`) || document.querySelector(`[data-highlight-id="${id}"]`);
+    if (marker) {
+      marker.classList.remove("temp-highlight");
+    }
+  }
+});
+
 // --- Show Comment Modal ---
 document.getElementById('commentButton').addEventListener('click', () => {
   showModal('speechBubble');
@@ -723,7 +771,4 @@ function saveAnnotationToServer(changeObj, topic) {
   .catch(error => {
     console.error("Error saving annotation to server:", error);
   });
-
-
-  
 }

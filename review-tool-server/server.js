@@ -14,15 +14,21 @@ app.use(express.static(path.join(__dirname, '../review-tool-client')));
 // Configure multer for file uploads.
 const upload = multer({ dest: 'uploads/' });
 
-// --- Persistence: Use a JSON file to store annotations ---
-const annotationsFile = path.join(__dirname, 'annotations.json');
+// --- Persistence: Store annotations in a separate file per document ---
+// Helper: Get the annotations file path for a given document (webhelpId)
+function getAnnotationsFile(webhelpId) {
+  return path.join(__dirname, `annotations-${webhelpId}.json`);
+}
 
-function readAnnotations() {
+// Helper: Read annotations for a document from its JSON file.
+function readAnnotations(webhelpId) {
+  const filePath = getAnnotationsFile(webhelpId);
   try {
-    if (!fs.existsSync(annotationsFile)) {
-      fs.writeFileSync(annotationsFile, '{}', 'utf8');
+    if (!fs.existsSync(filePath)) {
+      // Create an empty JSON file if it doesn't exist.
+      fs.writeFileSync(filePath, '{}', 'utf8');
     }
-    const data = fs.readFileSync(annotationsFile, 'utf8');
+    const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (err) {
     console.error("Error reading annotations file:", err);
@@ -30,9 +36,11 @@ function readAnnotations() {
   }
 }
 
-function writeAnnotations(data) {
+// Helper: Write annotations for a document to its JSON file.
+function writeAnnotations(annotations, webhelpId) {
+  const filePath = getAnnotationsFile(webhelpId);
   try {
-    fs.writeFileSync(annotationsFile, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(filePath, JSON.stringify(annotations, null, 2), 'utf8');
   } catch (err) {
     console.error("Error writing annotations file:", err);
   }
@@ -40,6 +48,7 @@ function writeAnnotations(data) {
 
 /**
  * Endpoint: Upload a zipped webhelp.
+ * Expects a form field "webhelpZip" (multipart/form-data).
  */
 app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
   const webhelpId = Date.now().toString();
@@ -65,6 +74,8 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
 
 /**
  * Endpoint: Serve a topic file.
+ * URL: /webhelp/:webhelpId/:version/* 
+ * The wildcard (*) represents the relative path to the topic HTML.
  */
 app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
@@ -80,27 +91,25 @@ app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
 app.post('/saveReviewChange', (req, res) => {
   const { webhelpId, version, topic, change } = req.body;
   console.log("Received annotation for:", webhelpId, version, topic, change);
-  const annotations = readAnnotations();
-  if (!annotations[webhelpId]) annotations[webhelpId] = {};
-  if (!annotations[webhelpId][version]) annotations[webhelpId][version] = {};
-  // Save the annotation under the provided topic string.
-  if (!annotations[webhelpId][version][topic]) annotations[webhelpId][version][topic] = [];
-  annotations[webhelpId][version][topic].push(change);
-  writeAnnotations(annotations);
+  // Read annotations for the specific document.
+  const annotations = readAnnotations(webhelpId);
+  if (!annotations[version]) annotations[version] = {};
+  if (!annotations[version][topic]) annotations[version][topic] = [];
+  annotations[version][topic].push(change);
+  writeAnnotations(annotations, webhelpId);
   res.json({ status: 'ok' });
 });
 
 /**
  * Endpoint: Retrieve review changes for a topic.
- * The topic is captured as a wildcard and decoded.
+ * URL: /getReviewChanges/:webhelpId/:version/* 
+ * The wildcard (*) represents the topic (URL‑encoded).
  */
 app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
   const topic = decodeURIComponent(req.params[0]);
-  const annotations = readAnnotations();
-  const changes = (annotations[webhelpId] &&
-                   annotations[webhelpId][version] &&
-                   annotations[webhelpId][version][topic]) || [];
+  const annotations = readAnnotations(webhelpId);
+  const changes = (annotations[version] && annotations[version][topic]) || [];
   res.json(changes);
 });
 

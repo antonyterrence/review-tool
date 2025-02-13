@@ -58,12 +58,28 @@
       color: #555;
       margin-top: 5px;
     }
+    /* New controls for version management */
+    .version-controls {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .version-controls select {
+      padding: 4px;
+      font-size: 0.9em;
+    }
+    .version-controls button {
+      padding: 4px 8px;
+      font-size: 0.9em;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h1>Dashboard</h1>
 
-  <!-- Upload Section (visible only for writers) -->
+  <!-- Upload Section (for uploading a new document) -->
   <div id="uploadSection" style="display:none;">
     <h3>Upload New Webhelp</h3>
     <form id="uploadForm" enctype="multipart/form-data">
@@ -77,7 +93,10 @@
   <div id="docList">
     <!-- Documents will be listed here -->
   </div>
-  
+
+  <!-- Hidden file input for uploading new versions -->
+  <input type="file" id="newVersionFile" accept=".zip" style="display:none;">
+
   <script>
     /*********************************************
      * Dashboard Page Script
@@ -93,7 +112,16 @@
       document.getElementById("uploadSection").style.display = "block";
     }
 
-    // Helper functions for localStorage (document records stored under "allDocuments")
+    // Document records are stored in localStorage under "allDocuments".
+    // Each document record has the structure:
+    // {
+    //   docId: <docId>,
+    //   uploader: <user>,
+    //   reviewers: [ ... ],
+    //   versions: [
+    //      { webhelpId, version, title, subFolder, status }
+    //   ]
+    // }
     function getAllDocuments() {
       return JSON.parse(localStorage.getItem("allDocuments") || "[]");
     }
@@ -117,26 +145,72 @@
         return;
       }
       filteredDocs.forEach(doc => {
+        // Fallback: if versions missing, create one from available properties.
+        if (!doc.versions || !doc.versions.length) {
+          doc.versions = [{
+            webhelpId: doc.webhelpId || doc.docId,
+            version: doc.version || "v1",
+            title: doc.title || "Untitled Document",
+            subFolder: doc.subFolder || "",
+            status: doc.status || "Under Review"
+          }];
+        }
+        const latest = doc.versions[doc.versions.length - 1];
         const docDiv = document.createElement("div");
         docDiv.className = "docItem";
-        // Create a clickable title.
         const docLink = document.createElement("a");
-        docLink.textContent = doc.title || `Document ${doc.webhelpId}`;
-        // Clicking on the title redirects to review.html with document parameters (including subFolder).
-        docLink.href = `review.html?webhelpId=${doc.webhelpId}&version=${doc.version}&subFolder=${encodeURIComponent(doc.subFolder)}`;
+        docLink.textContent = latest.title || `Document ${latest.webhelpId}`;
+        // Clicking the title redirects to review page using parameters from the selected version.
+        docLink.href = `review.html?webhelpId=${latest.webhelpId}&version=${latest.version}&subFolder=${encodeURIComponent(latest.subFolder)}`;
         docDiv.appendChild(docLink);
-        // Show additional details.
         const details = document.createElement("div");
         details.className = "docDetails";
-        details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${doc.status}`;
+        details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${latest.status}`;
         docDiv.appendChild(details);
+
+        // Version controls: dropdown and "Upload New Version" button.
+        const versionControls = document.createElement("div");
+        versionControls.className = "version-controls";
+        const versionSelect = document.createElement("select");
+        doc.versions.forEach((ver, idx) => {
+          const opt = document.createElement("option");
+          // Use the version string (e.g., "v1", "v2") as value.
+          opt.value = ver.version;
+          // Display just the number (strip "v").
+          opt.textContent = ver.version.replace("v", "");
+          // If this is the latest version, mark it as selected.
+          if (ver.version === latest.version) {
+            opt.selected = true;
+          }
+          versionSelect.appendChild(opt);
+        });
+        versionSelect.addEventListener("change", () => {
+          const selectedVersion = doc.versions.find(ver => ver.version === versionSelect.value);
+          if (selectedVersion) {
+            docLink.href = `review.html?webhelpId=${selectedVersion.webhelpId}&version=${selectedVersion.version}&subFolder=${encodeURIComponent(selectedVersion.subFolder)}`;
+            details.textContent = `Reviewers: ${doc.reviewers.join(", ")} | Status: ${selectedVersion.status}`;
+          }
+        });
+        const uploadBtn = document.createElement("button");
+        uploadBtn.textContent = "Upload New Version";
+        uploadBtn.addEventListener("click", () => {
+          const fileInput = document.getElementById("newVersionFile");
+          // Set the docId in the file input so the server knows this is a version update.
+          fileInput.dataset.docId = doc.docId;
+          fileInput.dataset.currentVersions = JSON.stringify(doc.versions);
+          fileInput.click();
+        });
+        versionControls.appendChild(versionSelect);
+        versionControls.appendChild(uploadBtn);
+        docDiv.appendChild(versionControls);
+
         docListDiv.appendChild(docDiv);
       });
     }
-    
+
     renderDashboard();
 
-    // Upload Form Submission (for writers)
+    // Upload Form Submission for new documents.
     const uploadForm = document.getElementById("uploadForm");
     if (uploadForm) {
       uploadForm.addEventListener("submit", function (event) {
@@ -144,7 +218,6 @@
         const fileInput = document.getElementById("webhelpZip");
         const file = fileInput.files[0];
         const reviewersInput = document.getElementById("reviewers").value.trim();
-
         if (!file) {
           alert("Please select a .zip file to upload.");
           return;
@@ -153,42 +226,33 @@
           alert("Please enter reviewer names (comma separated).");
           return;
         }
-        // Convert reviewer names string into an array.
         const reviewerNames = reviewersInput.split(",")
           .map(name => name.trim())
           .filter(name => name !== "");
-
-        // Prepare form data.
         const formData = new FormData();
         formData.append("webhelpZip", file);
-
-        // Send the file to the server endpoint.
         fetch("/uploadWebhelp", {
           method: "POST",
           body: formData,
         })
           .then(response => response.json())
           .then(data => {
-            // Expected server response: { webhelpId, version, title, subFolder }
             alert("Upload successful!\n" +
                   "Document Title: " + data.title + "\n" +
                   "Document ID: " + data.webhelpId + ", Version: " + data.version);
-            // Create a new document record.
+            // Create a new document record with a versions array.
             const newDoc = {
-              webhelpId: data.webhelpId,
-              version: data.version,
-              title: data.title,
-              subFolder: data.subFolder,  // Include the dynamic subfolder name.
+              docId: data.webhelpId,
               uploader: currentUser,
               reviewers: reviewerNames,
-              status: "Under Review"
+              versions: [
+                { webhelpId: data.webhelpId, version: data.version, title: data.title, subFolder: data.subFolder, status: "Under Review" }
+              ]
             };
             let allDocs = getAllDocuments();
             allDocs.push(newDoc);
             saveAllDocuments(allDocs);
-            // Refresh the document list.
             renderDashboard();
-            // Clear the upload form.
             uploadForm.reset();
           })
           .catch(error => {
@@ -197,6 +261,48 @@
           });
       });
     }
+
+    // New Version Upload Handling.
+    document.getElementById("newVersionFile").addEventListener("change", function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const docId = event.target.dataset.docId;
+      let allDocs = getAllDocuments();
+      const docIndex = allDocs.findIndex(doc => doc.docId === docId);
+      if (docIndex === -1) {
+        alert("Document record not found.");
+        return;
+      }
+      const formData = new FormData();
+      formData.append("webhelpZip", file);
+      // Append the docId so the server knows this is a version update.
+      formData.append("docId", docId);
+      fetch("/uploadWebhelp", {
+        method: "POST",
+        body: formData,
+      })
+        .then(response => response.json())
+        .then(data => {
+          alert("New version upload successful!\n" +
+                "Document Title: " + data.title + "\n" +
+                "Document ID: " + data.webhelpId + ", Version: " + data.version);
+          const newVersion = { 
+            webhelpId: data.webhelpId, 
+            version: data.version, 
+            title: data.title, 
+            subFolder: data.subFolder, 
+            status: "Under Review" 
+          };
+          allDocs[docIndex].versions.push(newVersion);
+          saveAllDocuments(allDocs);
+          renderDashboard();
+          event.target.value = "";
+        })
+        .catch(error => {
+          console.error("Error uploading new version:", error);
+          alert("Error uploading new version.");
+        });
+    });
   </script>
 </body>
 </html>

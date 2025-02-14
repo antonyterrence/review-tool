@@ -10,5 +10,3 @@
 * A simple Node.js web app prototype
 * Stores tracked changes in annotations.json file on the server. A separate annotation.json file is created for each document uploaded.
 * Document versions are tracked through documents.json file on the server
-
-![image](https://github.com/user-attachments/assets/629b598e-2b81-4e3a-bb45-5d699320e7c7)

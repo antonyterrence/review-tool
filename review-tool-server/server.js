@@ -227,8 +227,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('cursor-update', (data) => {
-    // Broadcast cursor updates to other clients in the room,
-    // including user and currentTopic information.
     const { room, cursorX, cursorY, user, currentTopic } = data;
     socket.to(room).emit('cursor-update', { id: socket.id, cursorX, cursorY, user, currentTopic });
   });

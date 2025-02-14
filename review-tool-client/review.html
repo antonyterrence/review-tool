@@ -9,10 +9,14 @@
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-  <!-- Header Section with a dummy search box and icon -->
+  <!-- Header Section with title, global user icons, and search box -->
   <header>
     <div class="header-container">
-      <h1>Collaborative Review Tool</h1>
+      <div class="title-and-users">
+        <h1>Collaborative Review Tool</h1>
+        <!-- Moved globalActiveUsers container here -->
+        <div id="globalActiveUsers"></div>
+      </div>
       <div class="search-box">
         <input type="text" placeholder="Search..." />
         <!-- Using a Unicode search icon; you can replace this with an image if desired -->
@@ -81,7 +85,6 @@
     <button id="replaceConfirm">Replace</button>
     <button id="replaceCancel">Cancel</button>
   </div>
-  <div id="globalActiveUsers"></div>
 
   <script src="js/review.js"></script>
 </body>

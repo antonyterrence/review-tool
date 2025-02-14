@@ -21,5 +21,4 @@ Download the comments
 Archival of closed comments
 Tag the stakeholders
 Automated emails for name tagging, comment status updates
-![Uploading image.png…]()
 

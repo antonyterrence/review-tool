@@ -3,3 +3,7 @@ review-tool-server/uploads/**
 node_modules/**
 package-lock.json
 uploads/**
+*.jpg
+*.png
+review-tool-server/documents.json
+review-tool-server/webhelps/**

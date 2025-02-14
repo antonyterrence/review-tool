@@ -9,6 +9,107 @@ const subFolder = params.get("subFolder");
 let currentTopic = localStorage.getItem("currentTopic") || "default";
 
 /************************************************
+ * Socket.IO Integration
+ ************************************************/
+// Initialize Socket.IO client (make sure the socket.io client library is included in your HTML)
+const socket = io();
+socket.on('connect', () => {
+  console.log('Connected to Socket.IO server:', socket.id);
+  // Join a room for the current document using webhelpId and version.
+  const room = 'document-' + webhelpId + '-' + version;
+  socket.emit('joinRoom', room);
+});
+socket.on('cursor-update', (data) => {
+  console.log('Received cursor update:', data);
+  // Optionally, update the UI to show other reviewers' positions.
+});
+
+/************************************************
+ * Global and Topic Cursor Indicators
+ ************************************************/
+const globalActiveUsers = {};  // { socketId: { user, lastUpdate } }
+const topicCursorMarkers = {}; // { socketId: markerElement }
+
+// Function to update the global active users display
+function updateGlobalActiveUsersDisplay() {
+  const container = document.getElementById('globalActiveUsers');
+  if (!container) return;
+  container.innerHTML = ''; // Clear existing list
+  Object.values(globalActiveUsers).forEach(userObj => {
+    const userDiv = document.createElement('div');
+    userDiv.className = 'global-user';
+    userDiv.textContent = userObj.user;
+    container.appendChild(userDiv);
+  });
+}
+
+/************************************************
+ * Cursor Marker for Other Users
+ ************************************************/
+// A map to keep track of other users’ cursor markers
+const otherCursorMarkers = {};
+
+// Handle incoming cursor update events
+socket.on('cursor-update', (data) => {
+  // Ignore updates from our own socket
+  if (data.id === socket.id) return;
+
+  // Update the global active users list
+  globalActiveUsers[data.id] = { user: data.user, lastUpdate: Date.now() };
+  updateGlobalActiveUsersDisplay();
+
+  // If the sending user is on the same topic, update/create their topic-level marker
+  if (data.currentTopic === currentTopic) {
+    let marker = topicCursorMarkers[data.id];
+    if (!marker) {
+      marker = document.createElement('div');
+      marker.className = 'topic-cursor-marker';
+      // Create a label to show the user's name
+      const label = document.createElement('div');
+      label.className = 'cursor-label';
+      label.textContent = data.user;
+      marker.appendChild(label);
+      // Append the marker inside the topicContent element
+      topicContent.appendChild(marker);
+      topicCursorMarkers[data.id] = marker;
+    }
+    // Update marker position relative to topicContent
+    const rect = topicContent.getBoundingClientRect();
+    marker.style.left = (data.cursorX - rect.left) + 'px';
+    marker.style.top = (data.cursorY - rect.top) + 'px';
+    // Store the last update time on the marker element
+    marker.dataset.lastUpdate = Date.now();
+  } else {
+    // If the user is not on the same topic, remove their topic marker if it exists
+    if (topicCursorMarkers[data.id]) {
+      topicCursorMarkers[data.id].remove();
+      delete topicCursorMarkers[data.id];
+    }
+  }
+});
+
+// Cleanup stale indicators every 3 seconds
+setInterval(() => {
+  const now = Date.now();
+  // Remove global users who haven't updated in over 3000ms
+  Object.keys(globalActiveUsers).forEach(id => {
+    if (now - globalActiveUsers[id].lastUpdate > 3000) {
+      delete globalActiveUsers[id];
+    }
+  });
+  updateGlobalActiveUsersDisplay();
+  
+  // Remove topic markers not updated in over 3000ms
+  Object.keys(topicCursorMarkers).forEach(id => {
+    const marker = topicCursorMarkers[id];
+    if (now - marker.dataset.lastUpdate > 3000) {
+      marker.remove();
+      delete topicCursorMarkers[id];
+    }
+  });
+}, 3000);
+
+/************************************************
  * Advanced Serialization Helper Functions
  ************************************************/
 /**
@@ -277,6 +378,21 @@ const annotationMap = new Map();
 const currentUserAnnotation = localStorage.getItem("currentUser") || "User1";
 let reviewItems = [];
 
+/************************************************
+ * Socket.IO: Emit Cursor Position on Mouse Move
+ ************************************************/
+topicContent.addEventListener('mousemove', (event) => {
+  const room = 'document-' + webhelpId + '-' + version;
+  socket.emit('cursor-update', { 
+    room, 
+    cursorX: event.clientX, 
+    cursorY: event.clientY, 
+    user: currentUserAnnotation, 
+    currentTopic: currentTopic 
+  });
+});
+
+
 /* Helper to check if an element is a heading */
 function isHeadingElement(elem) {
   return elem && elem.tagName && /^H[1-6]$/.test(elem.tagName);
@@ -520,7 +636,6 @@ document.getElementById('submitComment').addEventListener('click', () => {
     closeModals();
   }
 });
-
 
 // --- Submit Reply Handler ---
 document.getElementById('submitReply').addEventListener('click', () => {

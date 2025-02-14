@@ -4,6 +4,8 @@ const unzipper = require('unzipper');
 const path = require('path');
 const fs = require('fs');
 const bodyParser = require('body-parser');
+const http = require('http');
+const socketIo = require('socket.io');
 
 const app = express();
 app.use(bodyParser.json());
@@ -19,7 +21,6 @@ const upload = multer({ dest: 'uploads/' });
  * Annotations Persistence
  * ---------------------------
  */
-// Store annotations in a separate file per document in an "annotations" folder.
 const annotationsDir = path.join(__dirname, 'annotations');
 if (!fs.existsSync(annotationsDir)) {
   fs.mkdirSync(annotationsDir);
@@ -53,8 +54,6 @@ function writeAnnotations(data, webhelpId) {
  * ---------------------------
  * Document Upload Endpoint
  * ---------------------------
- * For new document uploads, no "docId" field is sent.
- * For new version uploads, a "docId" field is provided.
  */
 app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
   if (req.body.docId) {
@@ -82,7 +81,6 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
         const items = fs.readdirSync(targetDir, { withFileTypes: true });
         let subDirs = items.filter(item => item.isDirectory()).map(item => item.name);
         let subFolder = subDirs.length > 0 ? subDirs[0] : "";
-        // For new versions, rename the extracted subfolder to indicate the version.
         if (newVersionNumber > 1 && subFolder) {
           const newSubFolder = subFolder + "_" + newVersionNumber;
           const oldPath = path.join(targetDir, subFolder);
@@ -211,7 +209,37 @@ app.post('/updateDocument', (req, res) => {
   }
 });
 
+// --- Socket.IO Integration ---
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Adjust for production
+    methods: ["GET", "POST"],
+  },
+});
+
+io.on('connection', (socket) => {
+  console.log(`New client connected: ${socket.id}`);
+
+  socket.on('joinRoom', (room) => {
+    socket.join(room);
+    console.log(`Socket ${socket.id} joined room ${room}`);
+  });
+
+  socket.on('cursor-update', (data) => {
+    // Broadcast cursor updates to other clients in the room,
+    // including user and currentTopic information.
+    const { room, cursorX, cursorY, user, currentTopic } = data;
+    socket.to(room).emit('cursor-update', { id: socket.id, cursorX, cursorY, user, currentTopic });
+  });
+  
+
+  socket.on('disconnect', () => {
+    console.log(`Client disconnected: ${socket.id}`);
+  });
+});
+
 const PORT = 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

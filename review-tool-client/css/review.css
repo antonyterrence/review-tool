@@ -471,3 +471,49 @@ header {
     margin-bottom: 8px;
   }
     
+  .cursor-marker {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: red;  /* Change the color as needed */
+    border-radius: 50%;
+    pointer-events: none;  /* So it doesn’t block interactions */
+    z-index: 9999;
+  }
+  
+  /* Global Active Users Indicator */
+#globalActiveUsers {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: #f2f2f2;
+  padding: 5px;
+  border: 1px solid #ccc;
+  z-index: 10000;
+}
+.global-user {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+/* Topic-level Cursor Marker */
+.topic-cursor-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: blue;
+  border-radius: 50%;
+  pointer-events: none; /* Don't block interactions */
+  z-index: 9999;
+}
+.topic-cursor-marker .cursor-label {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  font-size: 10px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}

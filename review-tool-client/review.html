@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="css/review-tool.css">
   <link rel="stylesheet" href="css/review.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/annotator/1.2.10/annotator.min.css">
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <!-- Header Section with a dummy search box and icon -->
@@ -80,6 +81,7 @@
     <button id="replaceConfirm">Replace</button>
     <button id="replaceCancel">Cancel</button>
   </div>
+  <div id="globalActiveUsers"></div>
 
   <script src="js/review.js"></script>
 </body>

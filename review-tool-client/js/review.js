@@ -827,7 +827,18 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   }
+
+  // Listen for annotation changes from other clients.
+// When another client makes a change, we reload annotations.
+socket.on('annotation-change', (data) => {
+  // Ignore events sent by this client.
+  if (data.id === socket.id) return;
+  console.log('Received annotation change from another client:', data);
+  // Reload annotations so that concurrent changes are visible.
+  loadAnnotationsFromServer(currentTopic);
+});
   
+  /*
   function saveAnnotationToServer(changeObj, topic) {
     console.log("Calling saveAnnotationToServer", changeObj);
     if (!topic) {
@@ -852,7 +863,37 @@ document.addEventListener('DOMContentLoaded', function() {
     .catch(error => {
       console.error("Error saving annotation to server:", error);
     });
-  }
+  }*/
+ // In your saveAnnotationToServer function, add an emit so that changes
+// are sent to other clients in the same room.
+function saveAnnotationToServer(changeObj, topic) {
+  if (!topic) topic = "default";
+
+  // Emit the change to other clients for concurrency.
+  socket.emit('annotation-change', {
+    room: 'document-' + webhelpId + '-' + currentVersion,
+    id: socket.id,
+    change: changeObj
+  });
+
+  fetch('/saveReviewChange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      webhelpId: webhelpId,
+      version: currentVersion,
+      topic: topic,
+      change: changeObj
+    })
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Annotation saved on server:", data);
+    })
+    .catch(error => {
+      console.error("Error saving annotation to server:", error);
+    });
+}
   
   // Inline Reply & Edit Handlers (unchanged)
   document.getElementById('reviewList').addEventListener('input', function(event) {

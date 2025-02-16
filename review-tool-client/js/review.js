@@ -4,114 +4,128 @@ document.addEventListener('DOMContentLoaded', function() {
    ************************************************/
   const params = new URLSearchParams(window.location.search);
   const webhelpId = params.get("webhelpId");
-  const version = params.get("version");
+  const version = params.get("version"); // Original version from URL (e.g. "v2")
   const subFolder = params.get("subFolder");
+  // For backwards compatibility (unused with dropdown versioning)
+  let showPreviousComments = false;
   // Retrieve current topic from localStorage; default to "default".
   let currentTopic = localStorage.getItem("currentTopic") || "default";
-
-  // Declare global active users and current user
+  
+  // Global variables for annotations and selection
+  let selectedText = '';
+  let selectedRange = null;
+  
+  // Global active users and current user info
   const globalActiveUsers = {};  // { socketId: { user, lastUpdate } }
   const currentUserAnnotation = localStorage.getItem("currentUser") || "User1";
   
-  // Get reference to topicContent element (should exist because DOM is loaded)
+  // Get reference to topicContent element
   const topicContent = document.getElementById("topicContent");
-
+  
+  // Global variable to track the currently selected version.
+  // Initialize to the version from the URL.
+  let currentVersion = version;
+  
+  /************************************************
+   * Version Selector Setup
+   ************************************************/
+  const currentVersionNum = parseInt(version.substring(1)) || 1;
+  const versionSelect = document.getElementById("versionSelect");
+  versionSelect.innerHTML = "";
+  // Populate the dropdown with versions from v1 up to the current version.
+  for (let i = 1; i <= currentVersionNum; i++) {
+    const opt = document.createElement("option");
+    opt.value = "v" + i;
+    opt.textContent = "v" + i;
+    versionSelect.appendChild(opt);
+  }
+  // If more than one version exists, add an option for merged annotations.
+  if (currentVersionNum > 1) {
+    const allOpt = document.createElement("option");
+    allOpt.value = "all";
+    allOpt.textContent = "All Versions";
+    versionSelect.appendChild(allOpt);
+  }
+  // Set default selection to the version from the URL.
+  versionSelect.value = version;
+  
+  // Initially load annotations for the current topic using the original version.
+  loadAnnotationsFromServer(currentTopic, false, version);
+  
   /************************************************
    * Socket.IO Integration
    ************************************************/
-  // Initialize Socket.IO client (make sure the socket.io client library is included in your HTML)
   const socket = io();
   socket.on('connect', () => {
     console.log('Connected to Socket.IO server:', socket.id);
-    const room = 'document-' + webhelpId + '-' + version;
+    // Join room using the currentVersion.
+    const room = 'document-' + webhelpId + '-' + currentVersion;
     socket.emit('joinRoom', room);
-    // Ensure your own icon appears immediately:
+    // Add current user to the global active users list.
     globalActiveUsers[socket.id] = { user: currentUserAnnotation, lastUpdate: Date.now() };
     updateGlobalActiveUsersDisplay();
   });
-
+  
   socket.on('cursor-update', (data) => {
     console.log('Received cursor update:', data);
-    // Optionally, update the UI to show other reviewers' positions.
+    // (Optional) Update UI to show other reviewers' cursor positions.
   });
-
+  
   /************************************************
    * Global and Topic Cursor Indicators
    ************************************************/
-  const topicCursorMarkers = {}; // { socketId: markerElement }
-
-  // Function to update the global active users display
+  const topicCursorMarkers = {};
+  
   function updateGlobalActiveUsersDisplay() {
     const container = document.getElementById('globalActiveUsers');
     if (!container) return;
-    container.innerHTML = ''; // Clear existing list
+    container.innerHTML = '';
     Object.values(globalActiveUsers).forEach(userObj => {
       const userDiv = document.createElement('div');
       userDiv.className = 'global-user';
-      // Show only the first letter (uppercase) in the circle.
       userDiv.textContent = userObj.user.charAt(0).toUpperCase();
-      // Set full name as tooltip.
       userDiv.title = userObj.user;
       container.appendChild(userDiv);
     });
   }
-
-  /************************************************
-   * Cursor Marker for Other Users
-   ************************************************/
-  // A map to keep track of other users’ cursor markers
+  
   const otherCursorMarkers = {};
-
-  // Handle incoming cursor update events
   socket.on('cursor-update', (data) => {
-    // Ignore updates from our own socket
     if (data.id === socket.id) return;
-
-    // Update the global active users list
     globalActiveUsers[data.id] = { user: data.user, lastUpdate: Date.now() };
     updateGlobalActiveUsersDisplay();
-
-    // If the sending user is on the same topic, update/create their topic-level marker
     if (data.currentTopic === currentTopic) {
       let marker = topicCursorMarkers[data.id];
       if (!marker) {
         marker = document.createElement('div');
         marker.className = 'topic-cursor-marker';
-        // Create a label to show the user's name
         const label = document.createElement('div');
         label.className = 'cursor-label';
         label.textContent = data.user;
         marker.appendChild(label);
-        // Append the marker inside the topicContent element
         topicContent.appendChild(marker);
         topicCursorMarkers[data.id] = marker;
       }
-      // Update marker position relative to topicContent
       const rect = topicContent.getBoundingClientRect();
       marker.style.left = (data.cursorX - rect.left) + 'px';
       marker.style.top = (data.cursorY - rect.top) + 'px';
-      // Store the last update time on the marker element
       marker.dataset.lastUpdate = Date.now();
     } else {
-      // If the user is not on the same topic, remove their topic marker if it exists
       if (topicCursorMarkers[data.id]) {
         topicCursorMarkers[data.id].remove();
         delete topicCursorMarkers[data.id];
       }
     }
   });
-
-  // Cleanup stale indicators every 5 seconds
+  
   setInterval(() => {
     const now = Date.now();
     Object.keys(globalActiveUsers).forEach(id => {
-      // Do not remove the current user's entry.
       if (id !== socket.id && now - globalActiveUsers[id].lastUpdate > 5000) {
         delete globalActiveUsers[id];
       }
     });
     updateGlobalActiveUsersDisplay();
-    
     Object.keys(topicCursorMarkers).forEach(id => {
       const marker = topicCursorMarkers[id];
       if (now - marker.dataset.lastUpdate > 5000) {
@@ -120,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }, 5000);
-
+  
   /************************************************
    * Advanced Serialization Helper Functions
    ************************************************/
@@ -159,6 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (commonAncestor.nodeType === Node.TEXT_NODE) {
       commonAncestor = commonAncestor.parentNode;
     }
+    // For lists (OL/UL)
     if (commonAncestor && (commonAncestor.tagName === "OL" || commonAncestor.tagName === "UL")) {
       const liElements = Array.from(commonAncestor.getElementsByTagName("li")).filter(li => {
         let liRange = document.createRange();
@@ -209,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function deserializeRange(serialized) {
     return advancedDeserializeRange(serialized);
   }
-
+  
   /************************************************
    * TOC & Topic Loading
    ************************************************/
@@ -217,6 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById("tocList").innerHTML = "<p>Missing document parameters.</p>";
     document.getElementById("topicContent").innerHTML = "<p>Cannot load document.</p>";
   } else {
+    // Load the index file from the original version (for TOC only)
     const indexUrl = `/webhelp/${webhelpId}/${version}/${subFolder}/index.html`;
     fetch(indexUrl)
       .then(response => {
@@ -240,7 +256,8 @@ document.addEventListener('DOMContentLoaded', function() {
               let href = this.getAttribute("href");
               currentTopic = href.replace('.html','');
               localStorage.setItem("currentTopic", currentTopic);
-              const topicUrl = `/webhelp/${webhelpId}/${version}/${subFolder}/${href}`;
+              // Use currentVersion to construct the topic URL.
+              const topicUrl = `/webhelp/${webhelpId}/${currentVersion}/${subFolder}/${href}`;
               fetch(topicUrl)
                 .then(resp => {
                   if (!resp.ok) {
@@ -273,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         } else {
           const headings = tempDiv.querySelectorAll("h2");
+          const tocList = document.getElementById("tocList");
           if (headings.length === 0) {
             tocList.innerHTML = "<p>No TOC found.</p>";
           } else {
@@ -283,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function() {
               tocItem.addEventListener("click", () => {
                 currentTopic = "topic" + (idx + 1);
                 localStorage.setItem("currentTopic", currentTopic);
-                const topicUrl = `/webhelp/${webhelpId}/${version}/${subFolder}/topic${idx + 1}.html`;
+                const topicUrl = `/webhelp/${webhelpId}/${currentVersion}/${subFolder}/topic${idx + 1}.html`;
                 fetch(topicUrl)
                   .then(resp => {
                     if (!resp.ok) {
@@ -315,6 +333,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById("topicContent").innerHTML = "<p>Error loading document content.</p>";
       });
   }
+  
   function overrideTopicLinks() {
     const topicDiv = document.getElementById("topicContent");
     const links = topicDiv.querySelectorAll("a");
@@ -324,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const href = this.getAttribute("href");
         currentTopic = href.replace('.html','');
         localStorage.setItem("currentTopic", currentTopic);
-        const topicUrl = `/webhelp/${webhelpId}/${version}/${subFolder}/${href}`;
+        const topicUrl = `/webhelp/${webhelpId}/${currentVersion}/${subFolder}/${href}`;
         fetch(topicUrl)
           .then(resp => {
             if (!resp.ok) {
@@ -343,21 +362,19 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   }
-
+  
   /************************************************
    * Annotation, Context Menu, and Review Panel Features
    ************************************************/
   const contextMenu = document.getElementById("contextMenu");
   const overlay = document.getElementById("overlay");
-  let selectedText = '';
-  let selectedRange = null;
   let currentReplyTarget = null;
   let currentEditTarget = null;
   const annotationMap = new Map();
   let reviewItems = [];
-
+  
   topicContent.addEventListener('mousemove', (event) => {
-    const room = 'document-' + webhelpId + '-' + version;
+    const room = 'document-' + webhelpId + '-' + currentVersion;
     socket.emit('cursor-update', { 
       room, 
       cursorX: event.clientX, 
@@ -366,11 +383,11 @@ document.addEventListener('DOMContentLoaded', function() {
       currentTopic: currentTopic 
     });
   });
-
+  
   function isHeadingElement(elem) {
     return elem && elem.tagName && /^H[1-6]$/.test(elem.tagName);
   }
-
+  
   function reapplyCommentMarker(annotation) {
     if (!annotation.range) return;
     const range = advancedDeserializeRange(annotation.range);
@@ -387,6 +404,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   }
+  
   function reapplyDeletionMarker(annotation) {
     if (!annotation.range) return;
     const range = advancedDeserializeRange(annotation.range);
@@ -402,6 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error("Error reapplying deletion marker:", e);
     }
   }
+  
   function reapplyHighlightMarker(annotation) {
     if (!annotation.range) return;
     const range = advancedDeserializeRange(annotation.range);
@@ -417,6 +436,7 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error("Error reapplying highlight marker:", e);
     }
   }
+  
   function reapplyReplacementMarker(annotation) {
     if (!annotation.range) return;
     const range = advancedDeserializeRange(annotation.range);
@@ -437,11 +457,18 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error("Error reapplying replacement marker:", e);
     }
   }
-  function loadAnnotationsFromServer(topic) {
+  
+  // loadAnnotationsFromServer now uses the provided baseVersion.
+  function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion = null) {
     if (!topic) topic = "default";
     currentTopic = topic;
     localStorage.setItem("currentTopic", currentTopic);
-    fetch(`/getReviewChanges/${webhelpId}/${version}/${encodeURIComponent(topic)}`)
+    let versionToUse = baseVersion ? baseVersion : version;
+    let url = `/getReviewChanges/${webhelpId}/${versionToUse}/${encodeURIComponent(topic)}`;
+    if (includePrevious) {
+      url += '?includePrevious=true';
+    }
+    fetch(url)
       .then(response => response.json())
       .then(flatAnnotations => {
         const annotationsMap = {};
@@ -488,9 +515,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error("Error loading annotations from server:", error);
       });
   }
+  
   window.addEventListener("load", () => {
     loadAnnotationsFromServer(currentTopic);
   });
+  
   topicContent.addEventListener('mouseup', (event) => {
     const selection = window.getSelection();
     if (selection.toString().trim() && topicContent.contains(selection.anchorNode)) {
@@ -501,11 +530,26 @@ document.addEventListener('DOMContentLoaded', function() {
       contextMenu.style.top = `${event.pageY}px`;
     }
   });
+  
   document.addEventListener('mousedown', (event) => {
     if (!contextMenu.contains(event.target)) {
       contextMenu.style.display = 'none';
     }
   });
+  
+  // Version selector event listener – update currentVersion and load annotations accordingly.
+  versionSelect.addEventListener("change", function() {
+    const selected = this.value; // "v1", "v2", or "all"
+    if (selected === "all") {
+      // For merged annotations, use currentVersion as the merge boundary.
+      loadAnnotationsFromServer(currentTopic, true, currentVersion);
+    } else {
+      // Update global currentVersion and load only annotations for that version.
+      currentVersion = selected;
+      loadAnnotationsFromServer(currentTopic, false, currentVersion);
+    }
+  });
+  
   function createReviewItem(type, data) {
     const item = document.createElement('div');
     item.className = `review-item ${type}`;
@@ -561,6 +605,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return item;
   }
+  
   document.getElementById('submitComment').addEventListener('click', () => {
     const text = document.getElementById('commentText').value.trim();
     if (text && selectedRange) {
@@ -588,6 +633,7 @@ document.addEventListener('DOMContentLoaded', function() {
       closeModals();
     }
   });
+  
   document.getElementById('submitReply').addEventListener('click', () => {
     const text = document.getElementById('replyText').value.trim();
     if (text && currentReplyTarget) {
@@ -613,6 +659,7 @@ document.addEventListener('DOMContentLoaded', function() {
       closeModals();
     }
   });
+  
   document.getElementById('submitEdit').addEventListener('click', () => {
     const text = document.getElementById('editText').value.trim();
     if (text && currentEditTarget) {
@@ -623,10 +670,12 @@ document.addEventListener('DOMContentLoaded', function() {
       closeModals();
     }
   });
+  
   document.getElementById('cancelReply').addEventListener('click', closeModals);
   document.getElementById('cancelEdit').addEventListener('click', closeModals);
   document.getElementById('cancelComment').addEventListener('click', closeModals);
   document.getElementById('replaceCancel').addEventListener('click', closeModals);
+  
   document.getElementById('highlightButton').addEventListener('click', () => {
     if (selectedRange) {
       const highlightId = Date.now().toString();
@@ -652,6 +701,7 @@ document.addEventListener('DOMContentLoaded', function() {
       saveAnnotationToServer(highlight, currentTopic);
     }
   });
+  
   document.getElementById('deleteButton').addEventListener('click', () => {
     if (selectedRange) {
       const deletionId = Date.now().toString();
@@ -677,6 +727,7 @@ document.addEventListener('DOMContentLoaded', function() {
       saveAnnotationToServer(deletion, currentTopic);
     }
   });
+  
   document.getElementById('replaceConfirm').addEventListener('click', () => {
     const newText = document.getElementById('replaceTo').value.trim();
     if (newText && selectedRange) {
@@ -710,6 +761,7 @@ document.addEventListener('DOMContentLoaded', function() {
       saveAnnotationToServer(replacement, currentTopic);
     }
   });
+  
   document.getElementById('reviewList').addEventListener('click', (e) => {
     const item = e.target.closest('.review-item');
     if (!item) return;
@@ -735,6 +787,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+  
   document.getElementById('reviewList').addEventListener('mouseover', (e) => {
     const item = e.target.closest('.review-item');
     if (!item) return;
@@ -747,6 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+  
   document.getElementById('reviewList').addEventListener('mouseout', (e) => {
     const item = e.target.closest('.review-item');
     if (!item) return;
@@ -759,18 +813,22 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
+  
   document.getElementById('commentButton').addEventListener('click', () => {
     showModal('speechBubble');
   });
+  
   document.getElementById('replaceButton').addEventListener('click', () => {
     document.getElementById('replaceFrom').value = selectedText;
     showModal('replaceModal');
   });
+  
   function showModal(modalId) {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     document.getElementById(modalId).style.display = 'block';
     overlay.style.display = 'block';
   }
+  
   function closeModals() {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     overlay.style.display = 'none';
@@ -780,6 +838,7 @@ document.addEventListener('DOMContentLoaded', function() {
     currentReplyTarget = null;
     currentEditTarget = null;
   }
+  
   document.addEventListener("click", function(event) {
     if (event.target && event.target.classList.contains("ellipsis-btn")) {
       event.stopPropagation();
@@ -842,6 +901,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
   });
+  
   function saveAnnotationToServer(changeObj, topic) {
     console.log("Calling saveAnnotationToServer");
     if (!topic) {
@@ -854,7 +914,7 @@ document.addEventListener('DOMContentLoaded', function() {
       },
       body: JSON.stringify({
         webhelpId: webhelpId,
-        version: version,
+        version: currentVersion,
         topic: topic,
         change: changeObj
       })

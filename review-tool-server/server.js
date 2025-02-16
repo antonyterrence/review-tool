@@ -156,9 +156,24 @@ app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
   const topic = decodeURIComponent(req.params[0]);
   const annotations = readAnnotations(webhelpId);
-  const changes = (annotations[version] && annotations[version][topic]) || [];
+  let changes = [];
+  if (req.query.includePrevious === 'true') {
+    // Merge annotations from all versions up to the current one.
+    const currentVersionNum = parseInt(version.substring(1)) || 1;
+    Object.keys(annotations).forEach(ver => {
+      const verNum = parseInt(ver.substring(1)) || 1;
+      if (verNum <= currentVersionNum && annotations[ver] && annotations[ver][topic]) {
+        changes = changes.concat(annotations[ver][topic]);
+      }
+    });
+  } else {
+    changes = (annotations[version] && annotations[version][topic]) || [];
+  }
+  // Disable caching so fresh data is always returned.
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.json(changes);
 });
+
 
 /**
  * ---------------------------

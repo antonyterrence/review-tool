@@ -538,17 +538,21 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   // Version selector event listener – update currentVersion and load annotations accordingly.
-  versionSelect.addEventListener("change", function() {
-    const selected = this.value; // "v1", "v2", or "all"
-    if (selected === "all") {
-      // For merged annotations, use currentVersion as the merge boundary.
-      loadAnnotationsFromServer(currentTopic, true, currentVersion);
-    } else {
-      // Update global currentVersion and load only annotations for that version.
-      currentVersion = selected;
-      loadAnnotationsFromServer(currentTopic, false, currentVersion);
-    }
-  });
+    // Version selector event listener – update currentVersion and reload annotations.
+    versionSelect.addEventListener("change", function() {
+      const selected = this.value; // "v1", "v2", or "all"
+      if (selected === "all") {
+        // For merged annotations, we want new annotations to be saved to the current (highest) version.
+        // So we set currentVersion back to the original version from the URL.
+        currentVersion = version;
+        loadAnnotationsFromServer(currentTopic, true, currentVersion);
+      } else {
+        // Update global currentVersion and load only annotations for that version.
+        currentVersion = selected;
+        loadAnnotationsFromServer(currentTopic, false, currentVersion);
+      }
+    });
+  
   
   function createReviewItem(type, data) {
     const item = document.createElement('div');

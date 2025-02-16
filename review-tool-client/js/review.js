@@ -4,26 +4,18 @@ document.addEventListener('DOMContentLoaded', function() {
    ************************************************/
   const params = new URLSearchParams(window.location.search);
   const webhelpId = params.get("webhelpId");
-  const version = params.get("version"); // Original version from URL (e.g. "v2")
+  const version = params.get("version"); // e.g. "v2"
   const subFolder = params.get("subFolder");
-  // For backwards compatibility (unused with dropdown versioning)
   let showPreviousComments = false;
-  // Retrieve current topic from localStorage; default to "default".
   let currentTopic = localStorage.getItem("currentTopic") || "default";
   
-  // Global variables for annotations and selection
   let selectedText = '';
   let selectedRange = null;
   
-  // Global active users and current user info
-  const globalActiveUsers = {};  // { socketId: { user, lastUpdate } }
+  const globalActiveUsers = {};  
   const currentUserAnnotation = localStorage.getItem("currentUser") || "User1";
   
-  // Get reference to topicContent element
   const topicContent = document.getElementById("topicContent");
-  
-  // Global variable to track the currently selected version.
-  // Initialize to the version from the URL.
   let currentVersion = version;
   
   /************************************************
@@ -32,24 +24,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const currentVersionNum = parseInt(version.substring(1)) || 1;
   const versionSelect = document.getElementById("versionSelect");
   versionSelect.innerHTML = "";
-  // Populate the dropdown with versions from v1 up to the current version.
   for (let i = 1; i <= currentVersionNum; i++) {
     const opt = document.createElement("option");
     opt.value = "v" + i;
     opt.textContent = "v" + i;
     versionSelect.appendChild(opt);
   }
-  // If more than one version exists, add an option for merged annotations.
   if (currentVersionNum > 1) {
     const allOpt = document.createElement("option");
     allOpt.value = "all";
     allOpt.textContent = "All Versions";
     versionSelect.appendChild(allOpt);
   }
-  // Set default selection to the version from the URL.
   versionSelect.value = version;
   
-  // Initially load annotations for the current topic using the original version.
   loadAnnotationsFromServer(currentTopic, false, version);
   
   /************************************************
@@ -58,24 +46,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const socket = io();
   socket.on('connect', () => {
     console.log('Connected to Socket.IO server:', socket.id);
-    // Join room using the currentVersion.
     const room = 'document-' + webhelpId + '-' + currentVersion;
     socket.emit('joinRoom', room);
-    // Add current user to the global active users list.
     globalActiveUsers[socket.id] = { user: currentUserAnnotation, lastUpdate: Date.now() };
     updateGlobalActiveUsersDisplay();
   });
   
   socket.on('cursor-update', (data) => {
     console.log('Received cursor update:', data);
-    // (Optional) Update UI to show other reviewers' cursor positions.
   });
   
   /************************************************
    * Global and Topic Cursor Indicators
    ************************************************/
   const topicCursorMarkers = {};
-  
   function updateGlobalActiveUsersDisplay() {
     const container = document.getElementById('globalActiveUsers');
     if (!container) return;
@@ -163,17 +147,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return "./" + parts.join("/");
   }
+  
   function getNodeByXPath(xpath, root) {
     let evaluator = new XPathEvaluator();
     let result = evaluator.evaluate(xpath, root, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
     return result.singleNodeValue;
   }
+  
   function advancedSerializeRange(range) {
     let commonAncestor = range.commonAncestorContainer;
     if (commonAncestor.nodeType === Node.TEXT_NODE) {
       commonAncestor = commonAncestor.parentNode;
     }
-    // For lists (OL/UL)
     if (commonAncestor && (commonAncestor.tagName === "OL" || commonAncestor.tagName === "UL")) {
       const liElements = Array.from(commonAncestor.getElementsByTagName("li")).filter(li => {
         let liRange = document.createRange();
@@ -204,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
       html: div.innerHTML
     };
   }
+  
   function advancedDeserializeRange(serialized) {
     const startNode = getNodeByXPath(serialized.startXPath, topicContent);
     const endNode = getNodeByXPath(serialized.endXPath, topicContent);
@@ -218,9 +204,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return range;
   }
+  
   function serializeRange(range) {
     return advancedSerializeRange(range);
   }
+  
   function deserializeRange(serialized) {
     return advancedDeserializeRange(serialized);
   }
@@ -232,7 +220,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById("tocList").innerHTML = "<p>Missing document parameters.</p>";
     document.getElementById("topicContent").innerHTML = "<p>Cannot load document.</p>";
   } else {
-    // Load the index file from the original version (for TOC only)
     const indexUrl = `/webhelp/${webhelpId}/${version}/${subFolder}/index.html`;
     fetch(indexUrl)
       .then(response => {
@@ -256,7 +243,6 @@ document.addEventListener('DOMContentLoaded', function() {
               let href = this.getAttribute("href");
               currentTopic = href.replace('.html','');
               localStorage.setItem("currentTopic", currentTopic);
-              // Use currentVersion to construct the topic URL.
               const topicUrl = `/webhelp/${webhelpId}/${currentVersion}/${subFolder}/${href}`;
               fetch(topicUrl)
                 .then(resp => {
@@ -459,70 +445,79 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // loadAnnotationsFromServer now uses the provided baseVersion.
-function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion = null) {
-  if (!topic) topic = "default";
-  currentTopic = topic;
-  localStorage.setItem("currentTopic", currentTopic);
-  let versionToUse = baseVersion ? baseVersion : version;
-  let url = `/getReviewChanges/${webhelpId}/${versionToUse}/${encodeURIComponent(topic)}`;
-  if (includePrevious) {
-    url += '?includePrevious=true';
-  }
-  fetch(url)
-    .then(response => response.json())
-    .then(flatAnnotations => {
-      const annotationsMap = {};
-      flatAnnotations.forEach(a => {
-        annotationsMap[a.id] = a;
-        a.replies = [];
-      });
-      const topAnnotations = [];
-      flatAnnotations.forEach(a => {
-        if (a.parentId) {
-          if (annotationsMap[a.parentId]) {
-            annotationsMap[a.parentId].replies.push(a);
+  function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion = null) {
+    if (!topic) topic = "default";
+    currentTopic = topic;
+    localStorage.setItem("currentTopic", currentTopic);
+    let versionToUse = baseVersion ? baseVersion : version;
+    let url = `/getReviewChanges/${webhelpId}/${versionToUse}/${encodeURIComponent(topic)}`;
+    if (includePrevious) {
+      url += '?includePrevious=true';
+    }
+    fetch(url)
+      .then(response => response.json())
+      .then(flatAnnotations => {
+        const annotationsMap = {};
+        flatAnnotations.forEach(a => {
+          annotationsMap[a.id] = a;
+          a.replies = [];
+        });
+        const topAnnotations = [];
+        flatAnnotations.forEach(a => {
+          if (a.parentId) {
+            if (annotationsMap[a.parentId]) {
+              annotationsMap[a.parentId].replies.push(a);
+            }
+          } else {
+            topAnnotations.push(a);
           }
-        } else {
-          topAnnotations.push(a);
-        }
-      });
-      const reviewList = document.getElementById("reviewList");
-      reviewList.innerHTML = "";
-      reviewItems = [];
-      topAnnotations.forEach(a => {
-        const item = createReviewItem(a.type, a);
-        if (a.type === 'comment' && a.range) {
-          reapplyCommentMarker(a);
-        } else if (a.type === 'deletion' && a.range) {
-          reapplyDeletionMarker(a);
-        } else if (a.type === 'highlight' && a.range) {
-          reapplyHighlightMarker(a);
-        } else if (a.type === 'replacement' && a.range) {
-          reapplyReplacementMarker(a);
-        }
-        // Append replies within the comment's reply container (if available)
+        });
+        const reviewList = document.getElementById("reviewList");
+        reviewList.innerHTML = "";
+        reviewItems = [];
+        topAnnotations.forEach(a => {
+          // Skip rendering if annotation is marked deleted or resolved
+          if (a.status === "deleted" || a.status === "resolved") {
+            return;
+          }
+          const item = createReviewItem(a.type, a);
+          if (a.type === 'comment' && a.range) {
+            reapplyCommentMarker(a);
+          } else if (a.type === 'deletion' && a.range) {
+            reapplyDeletionMarker(a);
+          } else if (a.type === 'highlight' && a.range) {
+            reapplyHighlightMarker(a);
+          } else if (a.type === 'replacement' && a.range) {
+            reapplyReplacementMarker(a);
+          }
+          // If status is accepted or rejected, add status icon
+          if (a.status === "accepted") {
+            addAnnotationStatusIcon(item, "accepted");
+          } else if (a.status === "rejected") {
+            addAnnotationStatusIcon(item, "rejected");
+          }
+  
           if (a.replies && a.replies.length > 0) {
             const replyContainer = item.querySelector('.reply-container');
             if (replyContainer) {
               a.replies.forEach(reply => {
+                if (reply.status === "deleted" || reply.status === "resolved") return;
                 const replyItem = createReplyItem(reply);
                 replyContainer.appendChild(replyItem);
                 reviewItems.push(reply);
               });
-              // Paginate replies if there are more than 2
               paginateReplies(replyContainer);
             }
           }
-
-        reviewList.appendChild(item);
-        reviewItems.push(a);
+  
+          reviewList.appendChild(item);
+          reviewItems.push(a);
+        });
+      })
+      .catch(error => {
+        console.error("Error loading annotations from server:", error);
       });
-    })
-    .catch(error => {
-      console.error("Error loading annotations from server:", error);
-    });
-}
-
+  }
   
   window.addEventListener("load", () => {
     loadAnnotationsFromServer(currentTopic);
@@ -545,270 +540,437 @@ function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion =
     }
   });
   
-  // Version selector event listener – update currentVersion and load annotations accordingly.
-    // Version selector event listener – update currentVersion and reload annotations.
-    versionSelect.addEventListener("change", function() {
-      const selected = this.value; // "v1", "v2", or "all"
-      if (selected === "all") {
-        // For merged annotations, we want new annotations to be saved to the current (highest) version.
-        // So we set currentVersion back to the original version from the URL.
-        currentVersion = version;
-        loadAnnotationsFromServer(currentTopic, true, currentVersion);
-      } else {
-        // Update global currentVersion and load only annotations for that version.
-        currentVersion = selected;
-        loadAnnotationsFromServer(currentTopic, false, currentVersion);
-      }
-    });
+  versionSelect.addEventListener("change", function() {
+    const selected = this.value;
+    if (selected === "all") {
+      currentVersion = version;
+      loadAnnotationsFromServer(currentTopic, true, currentVersion);
+    } else {
+      currentVersion = selected;
+      loadAnnotationsFromServer(currentTopic, false, currentVersion);
+    }
+  });
   
-    // Helper function to format the timestamp (displays MM/DD, Time)
-function formatTimestamp(ts) {
-  const d = new Date(ts);
-  if (isNaN(d)) return ts;
-  return d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) + ", " +
-         d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function createReviewItem(type, data) {
-  const item = document.createElement('div');
-  // Add the type as a class so .review-item.comment, .review-item.deletion, etc. will work
-  item.classList.add('annotation-entry', 'review-item', type);
-  item.dataset.itemId = data.id;
-  item.dataset.type = type;
-  
-  let content = "";
-  if (type === 'comment') {
-    content = data.text;
-  } else if (type === 'deletion') {
-    content = "Deleted: " + (data.deletedText || data.deletedHtml || "");
-  } else if (type === 'highlight') {
-    content = "Highlighted: <span class='text-highlight'>" + (data.highlightedText || data.highlightedHtml || "") + "</span>";
-  } else if (type === 'replacement') {
-    content = `<div>Replaced: <span class="deleted-text">${data.oldText || data.oldHtml || ""}</span></div>
-               <div>With: <span class="replacement-text">${data.newText}</span></div>`;
+  // Helper function to format the timestamp
+  function formatTimestamp(ts) {
+    const d = new Date(ts);
+    if (isNaN(d)) return ts;
+    return d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) + ", " +
+           d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   }
-
-  item.innerHTML = `
-    <div class="annotation-header author">
-      <div class="author-info">
-        <div class="annotation-username username">${data.user}</div>
-        <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
-      </div>
-      <button class="ellipsis-btn">…</button>
-    </div>
-    <div class="annotation-content text">${content}</div>
-    <div class="reply-container"></div>
-    <div class="inline-reply">
-      <textarea class="reply-textarea" placeholder="Reply"></textarea>
-      <div class="reply-buttons">
-        <button class="reply-cancel small-btn" disabled>Cancel</button>
-        <button class="reply-post small-btn" disabled>Post</button>
-      </div>
-    </div>
-  `;
   
-  return item;
-}
-
-
-
-function createReplyItem(data) {
-  const replyItem = document.createElement('div');
-  replyItem.classList.add('reply-item');
-  replyItem.dataset.itemId = data.id;
-  replyItem.innerHTML = `
-    <div class="annotation-header reply-header">
-      <div class="author-info">
-        <div class="annotation-username username">${data.user}</div>
-        <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
-      </div>
-      <button class="reply-edit-btn small-btn">Edit</button>
-    </div>
-    <div class="annotation-content text reply-text">${data.text}</div>
-  `;
-  return replyItem;
-}
-
-
-function paginateReplies(replyContainer) {
-  const batchSize = 2;
-  const replyItems = Array.from(replyContainer.querySelectorAll('.reply-item'));
-  if (replyItems.length > batchSize) {
-    // Hide all replies after the first batch
-    replyItems.slice(batchSize).forEach(reply => {
-      reply.style.display = 'none';
-    });
-    // Create a "View More" button
-    const viewMoreBtn = document.createElement('button');
-    viewMoreBtn.textContent = 'View More';
-    viewMoreBtn.classList.add('view-more-btn', 'small-btn');
-    replyContainer.appendChild(viewMoreBtn);
+  function createReviewItem(type, data) {
+    const item = document.createElement('div');
+    // Add the type as a class so that CSS rules (e.g., .review-item.comment) apply
+    item.classList.add('annotation-entry', 'review-item', type);
+    item.dataset.itemId = data.id;
+    item.dataset.type = type;
     
-    viewMoreBtn.addEventListener('click', () => {
-      // Find hidden replies and reveal the next batch
-      const hiddenReplies = replyItems.filter(reply => reply.style.display === 'none');
-      const toShow = hiddenReplies.slice(0, batchSize);
-      toShow.forEach(reply => reply.style.display = 'block');
-      // If no more hidden replies, remove the button
-      if (replyItems.every(reply => reply.style.display !== 'none')) {
-        viewMoreBtn.remove();
-      }
-    });
-  }
-}
-
-
-
-
-// Handle click on the Edit button for replies
-document.getElementById('reviewList').addEventListener('click', function(event) {
-  if (event.target.classList.contains('reply-edit-btn')) {
-    const replyItem = event.target.closest('.reply-item');
-    const replyTextDiv = replyItem.querySelector('.reply-text');
-    // Hide the reply text
-    replyTextDiv.style.display = 'none';
+    let content = "";
+    if (type === 'comment') {
+      content = data.text;
+    } else if (type === 'deletion') {
+      content = "Deleted: " + (data.deletedText || data.deletedHtml || "");
+    } else if (type === 'highlight') {
+      content = "Highlighted: <span class='text-highlight'>" + (data.highlightedText || data.highlightedHtml || "") + "</span>";
+    } else if (type === 'replacement') {
+      content = `<div>Replaced: <span class="deleted-text">${data.oldText || data.oldHtml || ""}</span></div>
+                 <div>With: <span class="replacement-text">${data.newText}</span></div>`;
+    }
     
-    // If an edit container already exists, show it; otherwise, create one.
-    let editContainer = replyItem.querySelector('.reply-edit-container');
-    if (!editContainer) {
-      editContainer = document.createElement('div');
-      editContainer.classList.add('reply-edit-container');
-      editContainer.innerHTML = `
-        <textarea class="reply-edit-textarea">${replyTextDiv.textContent}</textarea>
-        <div class="reply-edit-buttons">
-          <button class="reply-edit-cancel small-btn">Cancel</button>
-          <button class="reply-edit-save small-btn" disabled>Save</button>
+    item.innerHTML = `
+      <div class="annotation-header author">
+        <div class="author-info">
+          <div class="annotation-username username">${data.user}</div>
+          <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
         </div>
-      `;
-      replyItem.appendChild(editContainer);
-    } else {
-      // Reset the textarea to the current text if the container already exists
-      const textarea = editContainer.querySelector('.reply-edit-textarea');
-      textarea.value = replyTextDiv.textContent;
-      editContainer.style.display = 'block';
+        <button class="ellipsis-btn">…</button>
+      </div>
+      <div class="annotation-content text">${content}</div>
+      <div class="reply-container"></div>
+      <div class="inline-reply">
+        <textarea class="reply-textarea" placeholder="Reply"></textarea>
+        <div class="reply-buttons">
+          <button class="reply-cancel small-btn" disabled>Cancel</button>
+          <button class="reply-post small-btn" disabled>Post</button>
+        </div>
+      </div>
+    `;
+    
+    return item;
+  }
+  
+  function createReplyItem(data) {
+    const replyItem = document.createElement('div');
+    replyItem.classList.add('reply-item');
+    replyItem.dataset.itemId = data.id;
+    replyItem.innerHTML = `
+      <div class="annotation-header reply-header">
+        <div class="author-info">
+          <div class="annotation-username username">${data.user}</div>
+          <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
+        </div>
+        <button class="reply-edit-btn small-btn">Edit</button>
+      </div>
+      <div class="annotation-content text reply-text">${data.text}</div>
+    `;
+    return replyItem;
+  }
+  
+  function paginateReplies(replyContainer) {
+    const batchSize = 2;
+    const replyItems = Array.from(replyContainer.querySelectorAll('.reply-item'));
+    if (replyItems.length > batchSize) {
+      replyItems.slice(batchSize).forEach(reply => {
+        reply.style.display = 'none';
+      });
+      const viewMoreBtn = document.createElement('button');
+      viewMoreBtn.textContent = 'View More';
+      viewMoreBtn.classList.add('view-more-btn', 'small-btn');
+      replyContainer.appendChild(viewMoreBtn);
+      
+      viewMoreBtn.addEventListener('click', () => {
+        const hiddenReplies = replyItems.filter(reply => reply.style.display === 'none');
+        const toShow = hiddenReplies.slice(0, batchSize);
+        toShow.forEach(reply => reply.style.display = 'block');
+        if (replyItems.every(reply => reply.style.display !== 'none')) {
+          viewMoreBtn.remove();
+        }
+      });
     }
   }
-});
-
-// Enable the Save button and make it bold when editing a reply
-document.getElementById('reviewList').addEventListener('input', function(event) {
-  if (event.target.classList.contains('reply-edit-textarea')) {
-    const editContainer = event.target.closest('.reply-edit-container');
-    const saveBtn = editContainer.querySelector('.reply-edit-save');
-    if (event.target.value.trim().length > 0) {
-      saveBtn.disabled = false;
-      saveBtn.style.fontWeight = 'bold';
-    } else {
-      saveBtn.disabled = true;
-      saveBtn.style.fontWeight = 'normal';
+  
+  // Ellipsis menu with options: Edit, Delete, Accept, Reject, Resolve
+  document.addEventListener("click", function(event) {
+    if (event.target && event.target.classList.contains("ellipsis-btn")) {
+      event.stopPropagation();
+      const existingMenu = document.querySelector(".comment-options-menu");
+      if (existingMenu) {
+        existingMenu.parentNode.removeChild(existingMenu);
+        return;
+      }
+      const parentAnnotation = event.target.closest(".review-item");
+      if (!parentAnnotation) return;
+      const annotationType = parentAnnotation.dataset.type;
+      const annotationId = parentAnnotation.dataset.itemId;
+      
+      const menu = document.createElement("div");
+      menu.className = "comment-options-menu";
+      menu.style.position = "fixed";
+      menu.style.background = "white";
+      menu.style.border = "1px solid #ccc";
+      menu.style.boxShadow = "2px 2px 5px rgba(0,0,0,0.2)";
+      menu.style.padding = "2px";
+      menu.style.zIndex = "2000";
+      menu.style.opacity = "0";
+      menu.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+      
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "Edit";
+      editBtn.style.margin = "2px 0";
+      
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete";
+      deleteBtn.style.margin = "2px 0";
+      
+      const acceptBtn = document.createElement("button");
+      acceptBtn.textContent = "Accept";
+      acceptBtn.style.margin = "2px 0";
+      
+      const rejectBtn = document.createElement("button");
+      rejectBtn.textContent = "Reject";
+      rejectBtn.style.margin = "2px 0";
+      
+      const resolveBtn = document.createElement("button");
+      resolveBtn.textContent = "Resolve";
+      resolveBtn.style.margin = "2px 0";
+      
+      if (annotationType === "comment") {
+        menu.appendChild(editBtn);
+      }
+      menu.appendChild(deleteBtn);
+      menu.appendChild(acceptBtn);
+      menu.appendChild(rejectBtn);
+      menu.appendChild(resolveBtn);
+      
+      const rect = event.target.getBoundingClientRect();
+      const menuWidth = 150;
+      if (rect.right + menuWidth > window.innerWidth) {
+        menu.style.left = (rect.left - menuWidth + 2) + "px";
+      } else {
+        menu.style.left = (rect.right - 2) + "px";
+      }
+      menu.style.top = (rect.top + 2) + "px";
+      
+      document.body.appendChild(menu);
+      requestAnimationFrame(() => {
+        menu.style.opacity = "1";
+        menu.style.transform = "translateY(0px)";
+      });
+      
+      editBtn.addEventListener("click", function() {
+        const textElem = parentAnnotation.querySelector(".text");
+        if (textElem) {
+          document.getElementById('editText').value = textElem.textContent;
+        }
+        currentEditTarget = parentAnnotation;
+        showModal('editModal');
+        removeMenu();
+      });
+      
+      deleteBtn.addEventListener("click", function() {
+        // Mark annotation as deleted
+        const annotationObj = reviewItems.find(item => item.id === annotationId);
+        if (annotationObj) {
+          annotationObj.status = "deleted";
+        }
+        parentAnnotation.remove();
+        revertAnnotationText(annotationType, annotationId);
+        annotationMap.delete(annotationId);
+        reviewItems = reviewItems.filter(item => item.id !== annotationId);
+        saveAnnotationToServer(annotationObj, currentTopic);
+        removeMenu();
+      });
+      
+      acceptBtn.addEventListener("click", function() {
+        const annotationObj = reviewItems.find(item => item.id === annotationId);
+        if (annotationObj) {
+          annotationObj.status = "accepted";
+        }
+        addAnnotationStatusIcon(parentAnnotation, "accepted");
+        saveAnnotationToServer(annotationObj, currentTopic);
+        removeMenu();
+      });
+      
+      rejectBtn.addEventListener("click", function() {
+        const annotationObj = reviewItems.find(item => item.id === annotationId);
+        if (annotationObj) {
+          annotationObj.status = "rejected";
+        }
+        addAnnotationStatusIcon(parentAnnotation, "rejected");
+        saveAnnotationToServer(annotationObj, currentTopic);
+        removeMenu();
+      });
+      
+      resolveBtn.addEventListener("click", function() {
+        const annotationObj = reviewItems.find(item => item.id === annotationId);
+        if (annotationObj) {
+          annotationObj.status = "resolved";
+        }
+        parentAnnotation.style.display = "none";
+        saveAnnotationToServer(annotationObj, currentTopic);
+        removeMenu();
+      });
+      
+      document.addEventListener("click", function handler(ev) {
+        if (!menu.contains(ev.target)) {
+          removeMenu();
+          document.removeEventListener("click", handler);
+        }
+      });
+      
+      function removeMenu() {
+        if (menu.parentNode) {
+          menu.parentNode.removeChild(menu);
+        }
+      }
+    }
+  });
+  
+  function addAnnotationStatusIcon(annotationItem, statusType) {
+    let existing = annotationItem.querySelector('.annotation-status');
+    if (existing) {
+      existing.remove();
+    }
+    const statusDiv = document.createElement('div');
+    statusDiv.classList.add('annotation-status');
+    if (statusType === 'accepted') {
+      statusDiv.textContent = '👍';
+      statusDiv.classList.add('status-accepted');
+    } else if (statusType === 'rejected') {
+      statusDiv.textContent = '👎';
+      statusDiv.classList.add('status-rejected');
+    }
+    annotationItem.style.position = 'relative';
+    statusDiv.style.position = 'absolute';
+    statusDiv.style.bottom = '8px';
+    statusDiv.style.left = '8px';
+    statusDiv.style.fontSize = '1.2em';
+    annotationItem.appendChild(statusDiv);
+  }
+  
+  function revertAnnotationText(annotationType, annotationId) {
+    if (annotationType === 'comment') {
+      const marker = document.querySelector(`.comment-marker[data-comment-id="${annotationId}"]`);
+      if (marker) {
+        marker.outerHTML = marker.textContent;
+      }
+    } else if (annotationType === 'highlight') {
+      const hlSpan = document.querySelector(`[data-highlight-id="${annotationId}"]`);
+      if (hlSpan) {
+        hlSpan.outerHTML = hlSpan.textContent;
+      }
+    } else if (annotationType === 'deletion') {
+      const deletedSpan = document.querySelector(`[data-deletion-id="${annotationId}"]`);
+      if (deletedSpan) {
+        deletedSpan.outerHTML = deletedSpan.textContent;
+      }
+    } else if (annotationType === 'replacement') {
+      const replacedItem = document.querySelector(`[data-deletion-id="${annotationId}"]`);
+      if (replacedItem) {
+        replacedItem.nextSibling?.remove();
+        const inserted = replacedItem.nextSibling;
+        if (inserted && inserted.classList.contains('inserted-text')) {
+          inserted.remove();
+        }
+        replacedItem.outerHTML = replacedItem.textContent;
+      }
     }
   }
-});
-
-// Handle click on the Cancel button in the reply edit form
-document.getElementById('reviewList').addEventListener('click', function(event) {
-  if (event.target.classList.contains('reply-edit-cancel')) {
-    const editContainer = event.target.closest('.reply-edit-container');
-    editContainer.style.display = 'none';
-    const replyItem = event.target.closest('.reply-item');
-    const replyTextDiv = replyItem.querySelector('.reply-text');
-    replyTextDiv.style.display = 'block';
+  
+  function saveAnnotationToServer(changeObj, topic) {
+    console.log("Calling saveAnnotationToServer", changeObj);
+    if (!topic) {
+      topic = "default";
+    }
+    fetch('/saveReviewChange', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        webhelpId: webhelpId,
+        version: currentVersion,
+        topic: topic,
+        change: changeObj
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Annotation saved on server:", data);
+    })
+    .catch(error => {
+      console.error("Error saving annotation to server:", error);
+    });
   }
-});
-
-// Handle click on the Save button in the reply edit form
-document.getElementById('reviewList').addEventListener('click', function(event) {
-  if (event.target.classList.contains('reply-edit-save')) {
-    const editContainer = event.target.closest('.reply-edit-container');
-    const textarea = editContainer.querySelector('.reply-edit-textarea');
-    const newText = textarea.value.trim();
-    if (newText) {
+  
+  // Inline Reply & Edit Handlers (unchanged)
+  document.getElementById('reviewList').addEventListener('input', function(event) {
+    if (event.target.classList.contains('reply-textarea')) {
+      const inlineReplyDiv = event.target.closest('.inline-reply');
+      const postBtn = inlineReplyDiv.querySelector('.reply-post');
+      const cancelBtn = inlineReplyDiv.querySelector('.reply-cancel');
+      if (event.target.value.trim().length > 0) {
+        postBtn.disabled = false;
+        cancelBtn.disabled = false;
+        postBtn.style.fontWeight = 'bold';
+      } else {
+        postBtn.disabled = true;
+        cancelBtn.disabled = true;
+        postBtn.style.fontWeight = 'normal';
+      }
+    }
+    if (event.target.classList.contains('reply-edit-textarea')) {
+      const editContainer = event.target.closest('.reply-edit-container');
+      const saveBtn = editContainer.querySelector('.reply-edit-save');
+      if (event.target.value.trim().length > 0) {
+        saveBtn.disabled = false;
+        saveBtn.style.fontWeight = 'bold';
+      } else {
+        saveBtn.disabled = true;
+        saveBtn.style.fontWeight = 'normal';
+      }
+    }
+  });
+  
+  document.getElementById('reviewList').addEventListener('click', function(event) {
+    if (event.target.classList.contains('reply-edit-btn')) {
       const replyItem = event.target.closest('.reply-item');
       const replyTextDiv = replyItem.querySelector('.reply-text');
-      // Update the reply text
-      replyTextDiv.textContent = newText;
-      replyTextDiv.style.display = 'block';
-      // Hide the edit container
-      editContainer.style.display = 'none';
-      
-      // Optionally, send an update to the server here:
-      // const replyId = replyItem.dataset.itemId;
-      // updateAnnotationOnServer({ id: replyId, newText: newText });
+      replyTextDiv.style.display = 'none';
+      let editContainer = replyItem.querySelector('.reply-edit-container');
+      if (!editContainer) {
+        editContainer = document.createElement('div');
+        editContainer.classList.add('reply-edit-container');
+        editContainer.innerHTML = `
+          <textarea class="reply-edit-textarea">${replyTextDiv.textContent}</textarea>
+          <div class="reply-edit-buttons">
+            <button class="reply-edit-cancel small-btn">Cancel</button>
+            <button class="reply-edit-save small-btn" disabled>Save</button>
+          </div>
+        `;
+        replyItem.appendChild(editContainer);
+      } else {
+        const textarea = editContainer.querySelector('.reply-edit-textarea');
+        textarea.value = replyTextDiv.textContent;
+        editContainer.style.display = 'block';
+      }
     }
-  }
-});
-
-
-// Enable the Post and Cancel buttons when typing
-document.getElementById('reviewList').addEventListener('input', function(event) {
-  if (event.target.classList.contains('reply-textarea')) {
-    const inlineReplyDiv = event.target.closest('.inline-reply');
-    const postBtn = inlineReplyDiv.querySelector('.reply-post');
-    const cancelBtn = inlineReplyDiv.querySelector('.reply-cancel');
-    if (event.target.value.trim().length > 0) {
-      postBtn.disabled = false;
-      cancelBtn.disabled = false;
-      postBtn.style.fontWeight = 'bold';
-    } else {
+  
+    if (event.target.classList.contains('reply-edit-cancel')) {
+      const editContainer = event.target.closest('.reply-edit-container');
+      editContainer.style.display = 'none';
+      const replyItem = event.target.closest('.reply-item');
+      const replyTextDiv = replyItem.querySelector('.reply-text');
+      replyTextDiv.style.display = 'block';
+    }
+  
+    if (event.target.classList.contains('reply-edit-save')) {
+      const editContainer = event.target.closest('.reply-edit-container');
+      const textarea = editContainer.querySelector('.reply-edit-textarea');
+      const newText = textarea.value.trim();
+      if (newText) {
+        const replyItem = event.target.closest('.reply-item');
+        const replyTextDiv = replyItem.querySelector('.reply-text');
+        replyTextDiv.textContent = newText;
+        replyTextDiv.style.display = 'block';
+        editContainer.style.display = 'none';
+      }
+    }
+  
+    if (event.target.classList.contains('reply-post')) {
+      const inlineReplyDiv = event.target.closest('.inline-reply');
+      const textarea = inlineReplyDiv.querySelector('.reply-textarea');
+      const replyText = textarea.value.trim();
+      if (replyText) {
+        const parentCommentElement = event.target.closest('.review-item');
+        const parentId = parentCommentElement.dataset.itemId;
+        const reply = {
+          id: Date.now().toString(),
+          type: 'reply',
+          user: currentUserAnnotation,
+          text: replyText,
+          timestamp: new Date().toLocaleString(),
+          parentId: parentId,
+        };
+        const replyElement = createReplyItem(reply);
+        let replyContainer = parentCommentElement.querySelector('.reply-container');
+        if (!replyContainer) {
+          replyContainer = document.createElement('div');
+          replyContainer.className = 'reply-container';
+          parentCommentElement.appendChild(replyContainer);
+        }
+        replyContainer.appendChild(replyElement);
+        reviewItems.push(reply);
+        saveAnnotationToServer(reply, currentTopic);
+        textarea.value = '';
+        event.target.disabled = true;
+        inlineReplyDiv.querySelector('.reply-cancel').disabled = true;
+        event.target.style.fontWeight = 'normal';
+      }
+    }
+  
+    if (event.target.classList.contains('reply-cancel')) {
+      const inlineReplyDiv = event.target.closest('.inline-reply');
+      const textarea = inlineReplyDiv.querySelector('.reply-textarea');
+      textarea.value = '';
+      const postBtn = inlineReplyDiv.querySelector('.reply-post');
+      const cancelBtn = inlineReplyDiv.querySelector('.reply-cancel');
       postBtn.disabled = true;
       cancelBtn.disabled = true;
       postBtn.style.fontWeight = 'normal';
     }
-  }
-});
-
-// Handle click on Post button to submit the reply
-document.getElementById('reviewList').addEventListener('click', function(event) {
-  if (event.target.classList.contains('reply-post')) {
-    const inlineReplyDiv = event.target.closest('.inline-reply');
-    const textarea = inlineReplyDiv.querySelector('.reply-textarea');
-    const replyText = textarea.value.trim();
-    if (replyText) {
-      const parentCommentElement = event.target.closest('.review-item');
-      const parentId = parentCommentElement.dataset.itemId;
-      const reply = {
-        id: Date.now().toString(),
-        type: 'reply',
-        user: currentUserAnnotation,
-        text: replyText,
-        timestamp: new Date().toLocaleString(),
-        parentId: parentId,
-      };
-      // Create the reply element using createReplyItem and append it into the comment's reply container.
-      const replyElement = createReplyItem(reply);
-      let replyContainer = parentCommentElement.querySelector('.reply-container');
-      if (!replyContainer) {
-        replyContainer = document.createElement('div');
-        replyContainer.className = 'reply-container';
-        parentCommentElement.appendChild(replyContainer);
-      }
-      replyContainer.appendChild(replyElement);
-      reviewItems.push(reply);
-      saveAnnotationToServer(reply, currentTopic);
-      // Clear the reply textarea and disable the buttons.
-      textarea.value = '';
-      event.target.disabled = true;
-      inlineReplyDiv.querySelector('.reply-cancel').disabled = true;
-      event.target.style.fontWeight = 'normal';
-    }
-  }
-});
-
-// Handle click on Cancel button to clear the reply form
-document.getElementById('reviewList').addEventListener('click', function(event) {
-  if (event.target.classList.contains('reply-cancel')) {
-    const inlineReplyDiv = event.target.closest('.inline-reply');
-    const textarea = inlineReplyDiv.querySelector('.reply-textarea');
-    textarea.value = '';
-    const postBtn = inlineReplyDiv.querySelector('.reply-post');
-    const cancelBtn = inlineReplyDiv.querySelector('.reply-cancel');
-    postBtn.disabled = true;
-    cancelBtn.disabled = true;
-    postBtn.style.fontWeight = 'normal';
-  }
-});
-
-    
+  });
   
   document.getElementById('submitComment').addEventListener('click', () => {
     const text = document.getElementById('commentText').value.trim();
@@ -867,7 +1029,10 @@ document.getElementById('reviewList').addEventListener('click', function(event) 
   document.getElementById('submitEdit').addEventListener('click', () => {
     const text = document.getElementById('editText').value.trim();
     if (text && currentEditTarget) {
-      currentEditTarget.querySelector('.text').textContent = text;
+      const textElem = currentEditTarget.querySelector('.text');
+      if (textElem) {
+        textElem.textContent = text;
+      }
       const comment = reviewItems.find(item => item.id === currentEditTarget.dataset.itemId);
       if (comment) comment.text = text;
       saveAnnotationToServer(comment, currentTopic);
@@ -1041,124 +1206,5 @@ document.getElementById('reviewList').addEventListener('click', function(event) 
     document.getElementById('editText').value = '';
     currentReplyTarget = null;
     currentEditTarget = null;
-  }
-  
-  document.addEventListener("click", function(event) {
-    if (event.target && event.target.classList.contains("ellipsis-btn")) {
-      event.stopPropagation();
-      const existingMenu = document.querySelector(".comment-options-menu");
-      // If a menu is already open, remove it and toggle off.
-      if (existingMenu) {
-        existingMenu.parentNode.removeChild(existingMenu);
-        return;
-      }
-      const menu = document.createElement("div");
-      menu.className = "comment-options-menu";
-      menu.style.position = "fixed";
-      menu.style.background = "white";
-      menu.style.border = "1px solid #ccc";
-      menu.style.boxShadow = "2px 2px 5px rgba(0,0,0,0.2)";
-      // Tight padding for a close appearance
-      menu.style.padding = "2px";
-      menu.style.zIndex = "2000";
-      // Initial opacity for smooth fade-in
-      menu.style.opacity = "0";
-      menu.style.transition = "opacity 0.2s ease, transform 0.2s ease";
-      
-      const editBtn = document.createElement("button");
-      editBtn.textContent = "Edit Comment";
-      editBtn.style.margin = "2px 0";
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Delete Comment";
-      deleteBtn.style.margin = "2px 0";
-      menu.appendChild(editBtn);
-      menu.appendChild(deleteBtn);
-      
-      // Get the bounding rectangle of the ellipsis button.
-      const rect = event.target.getBoundingClientRect();
-      const menuWidth = 150; // estimated width of the menu
-      
-      // Position menu flush with the ellipsis button:
-      if (rect.right + menuWidth > window.innerWidth) {
-        menu.style.left = (rect.left - menuWidth + 2) + "px";
-      } else {
-        menu.style.left = (rect.right - 2) + "px";
-      }
-      menu.style.top = (rect.top + 2) + "px";
-      
-      document.body.appendChild(menu);
-      
-      // Trigger smooth fade-in.
-      requestAnimationFrame(() => {
-        menu.style.opacity = "1";
-        menu.style.transform = "translateY(0px)";
-      });
-      
-      editBtn.addEventListener("click", function() {
-        const parentComment = event.target.closest(".review-item");
-        if (parentComment) {
-          currentEditTarget = parentComment;
-          const textElem = parentComment.querySelector(".text");
-          if (textElem) {
-            document.getElementById('editText').value = textElem.textContent;
-          }
-          showModal('editModal');
-        }
-        if (menu.parentNode) menu.parentNode.removeChild(menu);
-      });
-      
-      deleteBtn.addEventListener("click", function() {
-        const parentComment = event.target.closest(".review-item");
-        if (parentComment) {
-          const commentId = parentComment.dataset.itemId;
-          parentComment.parentNode.removeChild(parentComment);
-          const marker = document.querySelector(`#topicContent .comment-marker[data-comment-id="${commentId}"]`);
-          if (marker) {
-            marker.outerHTML = marker.textContent;
-          }
-          annotationMap.delete(commentId);
-          reviewItems = reviewItems.filter(item => item.id !== commentId);
-          saveAnnotationToServer({ id: commentId, type: 'delete' }, currentTopic);
-        }
-        if (menu.parentNode) menu.parentNode.removeChild(menu);
-      });
-      
-      // Clicking anywhere outside dismisses the menu.
-      document.addEventListener("click", function handler(ev) {
-        if (!menu.contains(ev.target)) {
-          if (menu.parentNode) menu.parentNode.removeChild(menu);
-          document.removeEventListener("click", handler);
-        }
-      });
-    }
-  });
-  
-  
-  
-  
-  function saveAnnotationToServer(changeObj, topic) {
-    console.log("Calling saveAnnotationToServer");
-    if (!topic) {
-      topic = "default";
-    }
-    fetch('/saveReviewChange', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        webhelpId: webhelpId,
-        version: currentVersion,
-        topic: topic,
-        change: changeObj
-      })
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.log("Annotation saved on server:", data);
-    })
-    .catch(error => {
-      console.error("Error saving annotation to server:", error);
-    });
   }
 });

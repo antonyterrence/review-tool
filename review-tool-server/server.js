@@ -50,24 +50,46 @@ function writeAnnotations(data, webhelpId) {
   }
 }
 
-// Add this function near the top (after your require() calls but before the upload endpoint)
-function extractZip(sourcePath, destPath, callback) {
-  fs.createReadStream(sourcePath)
-    .pipe(unzipper.Parse())
-    .on('entry', function(entry) {
-      const entryPath = entry.path;
-      const fullPath = path.join(destPath, entryPath);
-      if (entry.type === 'Directory') {
-        fs.mkdirSync(fullPath, { recursive: true });
-        entry.autodrain();
-      } else {
-        fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-        entry.pipe(fs.createWriteStream(fullPath));
+/**
+ * Updated Save Endpoint: Update annotation if exists, else push.
+ */
+app.post('/saveReviewChange', (req, res) => {
+  const { webhelpId, version, topic, change } = req.body;
+  console.log("Received annotation for:", webhelpId, version, topic, change);
+  const annotations = readAnnotations(webhelpId);
+  if (!annotations[version]) annotations[version] = {};
+  if (!annotations[version][topic]) annotations[version][topic] = [];
+  
+  // Check if an annotation with this ID exists; if so, update it.
+  const index = annotations[version][topic].findIndex(item => item.id === change.id);
+  if (index !== -1) {
+    annotations[version][topic][index] = change;
+  } else {
+    annotations[version][topic].push(change);
+  }
+  writeAnnotations(annotations, webhelpId);
+  res.json({ status: 'ok' });
+});
+
+app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
+  const { webhelpId, version } = req.params;
+  const topic = decodeURIComponent(req.params[0]);
+  const annotations = readAnnotations(webhelpId);
+  let changes = [];
+  if (req.query.includePrevious === 'true') {
+    const currentVersionNum = parseInt(version.substring(1)) || 1;
+    Object.keys(annotations).forEach(ver => {
+      const verNum = parseInt(ver.substring(1)) || 1;
+      if (verNum <= currentVersionNum && annotations[ver] && annotations[ver][topic]) {
+        changes = changes.concat(annotations[ver][topic]);
       }
-    })
-    .on('close', callback)
-    .on('error', callback);
-}
+    });
+  } else {
+    changes = (annotations[version] && annotations[version][topic]) || [];
+  }
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.json(changes);
+});
 
 /**
  * ---------------------------
@@ -76,7 +98,6 @@ function extractZip(sourcePath, destPath, callback) {
  */
 app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
   if (req.body.docId) {
-    // New version upload for an existing document.
     const webhelpId = req.body.docId;
     const docDir = path.join(__dirname, 'webhelps', webhelpId);
     let newVersionNumber = 1;
@@ -95,8 +116,6 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
     const targetDir = path.join(docDir, version);
     fs.mkdirSync(targetDir, { recursive: true });
     extractZip(req.file.path, targetDir, () => {
-      // Determine subFolder: if index.html exists at targetDir, leave subFolder empty;
-      // otherwise, if one or more directories exist, use the first.
       let subFolder = "";
       if (!fs.existsSync(path.join(targetDir, "index.html"))) {
         const items = fs.readdirSync(targetDir, { withFileTypes: true });
@@ -105,7 +124,6 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
           subFolder = subDirs[0];
         }
       }
-      // (Optional: if you need to rename the extracted subfolder for new versions, you can do that here)
       let title = "";
       const indexPath = subFolder ? path.join(targetDir, subFolder, "index.html") : path.join(targetDir, "index.html");
       if (fs.existsSync(indexPath)) {
@@ -115,9 +133,7 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
       }
       res.json({ webhelpId, version, title, subFolder });
     });
-    
   } else {
-    // New document upload.
     const webhelpId = Date.now().toString();
     const version = 'v1';
     const targetDir = path.join(__dirname, 'webhelps', webhelpId, version);
@@ -140,15 +156,9 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
       }
       res.json({ webhelpId, version, title, subFolder });
     });
-    
   }
 });
 
-/**
- * ---------------------------
- * Serve Topic Files
- * ---------------------------
- */
 app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
   const topicPath = req.params[0];
@@ -156,43 +166,23 @@ app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   res.sendFile(filePath);
 });
 
-/**
- * ---------------------------
- * Save and Retrieve Annotations
- * ---------------------------
- */
-app.post('/saveReviewChange', (req, res) => {
-  const { webhelpId, version, topic, change } = req.body;
-  console.log("Received annotation for:", webhelpId, version, topic, change);
-  const annotations = readAnnotations(webhelpId);
-  if (!annotations[version]) annotations[version] = {};
-  if (!annotations[version][topic]) annotations[version][topic] = [];
-  annotations[version][topic].push(change);
-  writeAnnotations(annotations, webhelpId);
-  res.json({ status: 'ok' });
-});
-app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
-  const { webhelpId, version } = req.params;
-  const topic = decodeURIComponent(req.params[0]);
-  const annotations = readAnnotations(webhelpId);
-  let changes = [];
-  if (req.query.includePrevious === 'true') {
-    // Merge annotations from all versions up to the current one.
-    const currentVersionNum = parseInt(version.substring(1)) || 1;
-    Object.keys(annotations).forEach(ver => {
-      const verNum = parseInt(ver.substring(1)) || 1;
-      if (verNum <= currentVersionNum && annotations[ver] && annotations[ver][topic]) {
-        changes = changes.concat(annotations[ver][topic]);
+function extractZip(sourcePath, destPath, callback) {
+  fs.createReadStream(sourcePath)
+    .pipe(unzipper.Parse())
+    .on('entry', function(entry) {
+      const entryPath = entry.path;
+      const fullPath = path.join(destPath, entryPath);
+      if (entry.type === 'Directory') {
+        fs.mkdirSync(fullPath, { recursive: true });
+        entry.autodrain();
+      } else {
+        fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        entry.pipe(fs.createWriteStream(fullPath));
       }
-    });
-  } else {
-    changes = (annotations[version] && annotations[version][topic]) || [];
-  }
-  // Disable caching so fresh data is always returned.
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.json(changes);
-});
-
+    })
+    .on('close', callback)
+    .on('error', callback);
+}
 
 /**
  * ---------------------------
@@ -243,11 +233,15 @@ app.post('/updateDocument', (req, res) => {
   }
 });
 
-// --- Socket.IO Integration ---
+/**
+ * ---------------------------
+ * Socket.IO Integration
+ * ---------------------------
+ */
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*", // Adjust for production
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
@@ -261,11 +255,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('cursor-update', (data) => {
-    const { room, cursorX, cursorY, user, currentTopic } = data;
-    socket.to(room).emit('cursor-update', { id: socket.id, cursorX, cursorY, user, currentTopic });
+    socket.to(data.room).emit('cursor-update', { id: socket.id, ...data });
   });
   
-
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
   });

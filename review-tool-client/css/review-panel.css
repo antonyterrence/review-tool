@@ -390,3 +390,26 @@ textarea, input[type="text"] {
 .view-more-btn:hover {
     text-decoration: underline;
 }
+
+.review-item {
+    position: relative; /* so absolute-positioned children can anchor inside */
+    margin: 12px 0;
+    padding: 12px;
+    /* etc. */
+  }
+  
+  .annotation-status {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    font-size: 1.2em;
+  }
+  
+  .status-accepted {
+    color: #4CAF50;
+  }
+  .status-rejected {
+    color: #f44336;
+  }
+  
+  

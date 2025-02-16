@@ -459,62 +459,70 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // loadAnnotationsFromServer now uses the provided baseVersion.
-  function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion = null) {
-    if (!topic) topic = "default";
-    currentTopic = topic;
-    localStorage.setItem("currentTopic", currentTopic);
-    let versionToUse = baseVersion ? baseVersion : version;
-    let url = `/getReviewChanges/${webhelpId}/${versionToUse}/${encodeURIComponent(topic)}`;
-    if (includePrevious) {
-      url += '?includePrevious=true';
-    }
-    fetch(url)
-      .then(response => response.json())
-      .then(flatAnnotations => {
-        const annotationsMap = {};
-        flatAnnotations.forEach(a => {
-          annotationsMap[a.id] = a;
-          a.replies = [];
-        });
-        const topAnnotations = [];
-        flatAnnotations.forEach(a => {
-          if (a.parentId) {
-            if (annotationsMap[a.parentId]) {
-              annotationsMap[a.parentId].replies.push(a);
-            }
-          } else {
-            topAnnotations.push(a);
-          }
-        });
-        const reviewList = document.getElementById("reviewList");
-        reviewList.innerHTML = "";
-        reviewItems = [];
-        topAnnotations.forEach(a => {
-          const item = createReviewItem(a.type, a);
-          if (a.type === 'comment' && a.range) {
-            reapplyCommentMarker(a);
-          } else if (a.type === 'deletion' && a.range) {
-            reapplyDeletionMarker(a);
-          } else if (a.type === 'highlight' && a.range) {
-            reapplyHighlightMarker(a);
-          } else if (a.type === 'replacement' && a.range) {
-            reapplyReplacementMarker(a);
-          }
-          if (a.replies && a.replies.length > 0) {
-            const repliesContainer = item.querySelector('.replies');
-            a.replies.forEach(reply => {
-              const replyItem = createReviewItem(reply.type, reply);
-              repliesContainer.appendChild(replyItem);
-            });
-          }
-          reviewList.appendChild(item);
-          reviewItems.push(a);
-        });
-      })
-      .catch(error => {
-        console.error("Error loading annotations from server:", error);
-      });
+function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion = null) {
+  if (!topic) topic = "default";
+  currentTopic = topic;
+  localStorage.setItem("currentTopic", currentTopic);
+  let versionToUse = baseVersion ? baseVersion : version;
+  let url = `/getReviewChanges/${webhelpId}/${versionToUse}/${encodeURIComponent(topic)}`;
+  if (includePrevious) {
+    url += '?includePrevious=true';
   }
+  fetch(url)
+    .then(response => response.json())
+    .then(flatAnnotations => {
+      const annotationsMap = {};
+      flatAnnotations.forEach(a => {
+        annotationsMap[a.id] = a;
+        a.replies = [];
+      });
+      const topAnnotations = [];
+      flatAnnotations.forEach(a => {
+        if (a.parentId) {
+          if (annotationsMap[a.parentId]) {
+            annotationsMap[a.parentId].replies.push(a);
+          }
+        } else {
+          topAnnotations.push(a);
+        }
+      });
+      const reviewList = document.getElementById("reviewList");
+      reviewList.innerHTML = "";
+      reviewItems = [];
+      topAnnotations.forEach(a => {
+        const item = createReviewItem(a.type, a);
+        if (a.type === 'comment' && a.range) {
+          reapplyCommentMarker(a);
+        } else if (a.type === 'deletion' && a.range) {
+          reapplyDeletionMarker(a);
+        } else if (a.type === 'highlight' && a.range) {
+          reapplyHighlightMarker(a);
+        } else if (a.type === 'replacement' && a.range) {
+          reapplyReplacementMarker(a);
+        }
+        // Append replies within the comment's reply container (if available)
+          if (a.replies && a.replies.length > 0) {
+            const replyContainer = item.querySelector('.reply-container');
+            if (replyContainer) {
+              a.replies.forEach(reply => {
+                const replyItem = createReplyItem(reply);
+                replyContainer.appendChild(replyItem);
+                reviewItems.push(reply);
+              });
+              // Paginate replies if there are more than 2
+              paginateReplies(replyContainer);
+            }
+          }
+
+        reviewList.appendChild(item);
+        reviewItems.push(a);
+      });
+    })
+    .catch(error => {
+      console.error("Error loading annotations from server:", error);
+    });
+}
+
   
   window.addEventListener("load", () => {
     loadAnnotationsFromServer(currentTopic);
@@ -553,62 +561,254 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   
+    // Helper function to format the timestamp (displays MM/DD, Time)
+function formatTimestamp(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return ts;
+  return d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) + ", " +
+         d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function createReviewItem(type, data) {
+  const item = document.createElement('div');
+  // Add the type as a class so .review-item.comment, .review-item.deletion, etc. will work
+  item.classList.add('annotation-entry', 'review-item', type);
+  item.dataset.itemId = data.id;
+  item.dataset.type = type;
   
-  function createReviewItem(type, data) {
-    const item = document.createElement('div');
-    item.className = `review-item ${type}`;
-    item.dataset.itemId = data.id;
-    item.dataset.type = type;
-    switch (type) {
-      case 'comment':
-        item.innerHTML = `
-          <div class="author">
-            <div class="username">${data.user}</div>
-            <div class="timestamp">${data.timestamp}</div>
-            <button class="ellipsis-btn">⋮</button>
-          </div>
-          <div class="text">${data.text}</div>
-          <div class="comment-actions">
-            <button class="reply-btn">Reply</button>
-          </div>
-          <div class="replies"></div>
-        `;
-        break;
-      case 'deletion':
-        item.innerHTML = `
-          <div class="deletion-meta">
-            <strong>${data.user}</strong>
-            <small>${data.timestamp}</small>
-          </div>
-          <div class="deletion-text">Deleted: ${data.deletedText || data.deletedHtml || ""}</div>
-        `;
-        break;
-      case 'highlight':
-        item.innerHTML = `
-          <div class="replacement-meta">
-            <strong>${data.user}</strong>
-            <small>${data.timestamp}</small>
-          </div>
-          <div class="replacement-content">
-            Highlighted: <span class="text-highlight">${data.highlightedText || data.highlightedHtml || ""}</span>
-          </div>
-        `;
-        break;
-      case 'replacement':
-        item.innerHTML = `
-          <div class="replacement-meta">
-            <strong>${data.user}</strong>
-            <small>${data.timestamp}</small>
-          </div>
-          <div class="replacement-content">
-            <div>Replaced: <span class="deleted-text">${data.oldText || data.oldHtml || ""}</span></div>
-            <div>With: <span class="replacement-text">${data.newText}</span></div>
-          </div>
-        `;
-        break;
-    }
-    return item;
+  let content = "";
+  if (type === 'comment') {
+    content = data.text;
+  } else if (type === 'deletion') {
+    content = "Deleted: " + (data.deletedText || data.deletedHtml || "");
+  } else if (type === 'highlight') {
+    content = "Highlighted: <span class='text-highlight'>" + (data.highlightedText || data.highlightedHtml || "") + "</span>";
+  } else if (type === 'replacement') {
+    content = `<div>Replaced: <span class="deleted-text">${data.oldText || data.oldHtml || ""}</span></div>
+               <div>With: <span class="replacement-text">${data.newText}</span></div>`;
   }
+
+  item.innerHTML = `
+    <div class="annotation-header author">
+      <div class="author-info">
+        <div class="annotation-username username">${data.user}</div>
+        <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
+      </div>
+      <button class="ellipsis-btn">…</button>
+    </div>
+    <div class="annotation-content text">${content}</div>
+    <div class="reply-container"></div>
+    <div class="inline-reply">
+      <textarea class="reply-textarea" placeholder="Reply"></textarea>
+      <div class="reply-buttons">
+        <button class="reply-cancel small-btn" disabled>Cancel</button>
+        <button class="reply-post small-btn" disabled>Post</button>
+      </div>
+    </div>
+  `;
+  
+  return item;
+}
+
+
+
+function createReplyItem(data) {
+  const replyItem = document.createElement('div');
+  replyItem.classList.add('reply-item');
+  replyItem.dataset.itemId = data.id;
+  replyItem.innerHTML = `
+    <div class="annotation-header reply-header">
+      <div class="author-info">
+        <div class="annotation-username username">${data.user}</div>
+        <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
+      </div>
+      <button class="reply-edit-btn small-btn">Edit</button>
+    </div>
+    <div class="annotation-content text reply-text">${data.text}</div>
+  `;
+  return replyItem;
+}
+
+
+function paginateReplies(replyContainer) {
+  const batchSize = 2;
+  const replyItems = Array.from(replyContainer.querySelectorAll('.reply-item'));
+  if (replyItems.length > batchSize) {
+    // Hide all replies after the first batch
+    replyItems.slice(batchSize).forEach(reply => {
+      reply.style.display = 'none';
+    });
+    // Create a "View More" button
+    const viewMoreBtn = document.createElement('button');
+    viewMoreBtn.textContent = 'View More';
+    viewMoreBtn.classList.add('view-more-btn', 'small-btn');
+    replyContainer.appendChild(viewMoreBtn);
+    
+    viewMoreBtn.addEventListener('click', () => {
+      // Find hidden replies and reveal the next batch
+      const hiddenReplies = replyItems.filter(reply => reply.style.display === 'none');
+      const toShow = hiddenReplies.slice(0, batchSize);
+      toShow.forEach(reply => reply.style.display = 'block');
+      // If no more hidden replies, remove the button
+      if (replyItems.every(reply => reply.style.display !== 'none')) {
+        viewMoreBtn.remove();
+      }
+    });
+  }
+}
+
+
+
+
+// Handle click on the Edit button for replies
+document.getElementById('reviewList').addEventListener('click', function(event) {
+  if (event.target.classList.contains('reply-edit-btn')) {
+    const replyItem = event.target.closest('.reply-item');
+    const replyTextDiv = replyItem.querySelector('.reply-text');
+    // Hide the reply text
+    replyTextDiv.style.display = 'none';
+    
+    // If an edit container already exists, show it; otherwise, create one.
+    let editContainer = replyItem.querySelector('.reply-edit-container');
+    if (!editContainer) {
+      editContainer = document.createElement('div');
+      editContainer.classList.add('reply-edit-container');
+      editContainer.innerHTML = `
+        <textarea class="reply-edit-textarea">${replyTextDiv.textContent}</textarea>
+        <div class="reply-edit-buttons">
+          <button class="reply-edit-cancel small-btn">Cancel</button>
+          <button class="reply-edit-save small-btn" disabled>Save</button>
+        </div>
+      `;
+      replyItem.appendChild(editContainer);
+    } else {
+      // Reset the textarea to the current text if the container already exists
+      const textarea = editContainer.querySelector('.reply-edit-textarea');
+      textarea.value = replyTextDiv.textContent;
+      editContainer.style.display = 'block';
+    }
+  }
+});
+
+// Enable the Save button and make it bold when editing a reply
+document.getElementById('reviewList').addEventListener('input', function(event) {
+  if (event.target.classList.contains('reply-edit-textarea')) {
+    const editContainer = event.target.closest('.reply-edit-container');
+    const saveBtn = editContainer.querySelector('.reply-edit-save');
+    if (event.target.value.trim().length > 0) {
+      saveBtn.disabled = false;
+      saveBtn.style.fontWeight = 'bold';
+    } else {
+      saveBtn.disabled = true;
+      saveBtn.style.fontWeight = 'normal';
+    }
+  }
+});
+
+// Handle click on the Cancel button in the reply edit form
+document.getElementById('reviewList').addEventListener('click', function(event) {
+  if (event.target.classList.contains('reply-edit-cancel')) {
+    const editContainer = event.target.closest('.reply-edit-container');
+    editContainer.style.display = 'none';
+    const replyItem = event.target.closest('.reply-item');
+    const replyTextDiv = replyItem.querySelector('.reply-text');
+    replyTextDiv.style.display = 'block';
+  }
+});
+
+// Handle click on the Save button in the reply edit form
+document.getElementById('reviewList').addEventListener('click', function(event) {
+  if (event.target.classList.contains('reply-edit-save')) {
+    const editContainer = event.target.closest('.reply-edit-container');
+    const textarea = editContainer.querySelector('.reply-edit-textarea');
+    const newText = textarea.value.trim();
+    if (newText) {
+      const replyItem = event.target.closest('.reply-item');
+      const replyTextDiv = replyItem.querySelector('.reply-text');
+      // Update the reply text
+      replyTextDiv.textContent = newText;
+      replyTextDiv.style.display = 'block';
+      // Hide the edit container
+      editContainer.style.display = 'none';
+      
+      // Optionally, send an update to the server here:
+      // const replyId = replyItem.dataset.itemId;
+      // updateAnnotationOnServer({ id: replyId, newText: newText });
+    }
+  }
+});
+
+
+// Enable the Post and Cancel buttons when typing
+document.getElementById('reviewList').addEventListener('input', function(event) {
+  if (event.target.classList.contains('reply-textarea')) {
+    const inlineReplyDiv = event.target.closest('.inline-reply');
+    const postBtn = inlineReplyDiv.querySelector('.reply-post');
+    const cancelBtn = inlineReplyDiv.querySelector('.reply-cancel');
+    if (event.target.value.trim().length > 0) {
+      postBtn.disabled = false;
+      cancelBtn.disabled = false;
+      postBtn.style.fontWeight = 'bold';
+    } else {
+      postBtn.disabled = true;
+      cancelBtn.disabled = true;
+      postBtn.style.fontWeight = 'normal';
+    }
+  }
+});
+
+// Handle click on Post button to submit the reply
+document.getElementById('reviewList').addEventListener('click', function(event) {
+  if (event.target.classList.contains('reply-post')) {
+    const inlineReplyDiv = event.target.closest('.inline-reply');
+    const textarea = inlineReplyDiv.querySelector('.reply-textarea');
+    const replyText = textarea.value.trim();
+    if (replyText) {
+      const parentCommentElement = event.target.closest('.review-item');
+      const parentId = parentCommentElement.dataset.itemId;
+      const reply = {
+        id: Date.now().toString(),
+        type: 'reply',
+        user: currentUserAnnotation,
+        text: replyText,
+        timestamp: new Date().toLocaleString(),
+        parentId: parentId,
+      };
+      // Create the reply element using createReplyItem and append it into the comment's reply container.
+      const replyElement = createReplyItem(reply);
+      let replyContainer = parentCommentElement.querySelector('.reply-container');
+      if (!replyContainer) {
+        replyContainer = document.createElement('div');
+        replyContainer.className = 'reply-container';
+        parentCommentElement.appendChild(replyContainer);
+      }
+      replyContainer.appendChild(replyElement);
+      reviewItems.push(reply);
+      saveAnnotationToServer(reply, currentTopic);
+      // Clear the reply textarea and disable the buttons.
+      textarea.value = '';
+      event.target.disabled = true;
+      inlineReplyDiv.querySelector('.reply-cancel').disabled = true;
+      event.target.style.fontWeight = 'normal';
+    }
+  }
+});
+
+// Handle click on Cancel button to clear the reply form
+document.getElementById('reviewList').addEventListener('click', function(event) {
+  if (event.target.classList.contains('reply-cancel')) {
+    const inlineReplyDiv = event.target.closest('.inline-reply');
+    const textarea = inlineReplyDiv.querySelector('.reply-textarea');
+    textarea.value = '';
+    const postBtn = inlineReplyDiv.querySelector('.reply-post');
+    const cancelBtn = inlineReplyDiv.querySelector('.reply-cancel');
+    postBtn.disabled = true;
+    cancelBtn.disabled = true;
+    postBtn.style.fontWeight = 'normal';
+  }
+});
+
+    
   
   document.getElementById('submitComment').addEventListener('click', () => {
     const text = document.getElementById('commentText').value.trim();
@@ -847,27 +1047,53 @@ document.addEventListener('DOMContentLoaded', function() {
     if (event.target && event.target.classList.contains("ellipsis-btn")) {
       event.stopPropagation();
       const existingMenu = document.querySelector(".comment-options-menu");
+      // If a menu is already open, remove it and toggle off.
       if (existingMenu) {
         existingMenu.parentNode.removeChild(existingMenu);
+        return;
       }
       const menu = document.createElement("div");
       menu.className = "comment-options-menu";
-      menu.style.position = "absolute";
+      menu.style.position = "fixed";
       menu.style.background = "white";
       menu.style.border = "1px solid #ccc";
       menu.style.boxShadow = "2px 2px 5px rgba(0,0,0,0.2)";
-      menu.style.padding = "5px";
-      menu.style.zIndex = "1100";
+      // Tight padding for a close appearance
+      menu.style.padding = "2px";
+      menu.style.zIndex = "2000";
+      // Initial opacity for smooth fade-in
+      menu.style.opacity = "0";
+      menu.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+      
       const editBtn = document.createElement("button");
       editBtn.textContent = "Edit Comment";
+      editBtn.style.margin = "2px 0";
       const deleteBtn = document.createElement("button");
       deleteBtn.textContent = "Delete Comment";
+      deleteBtn.style.margin = "2px 0";
       menu.appendChild(editBtn);
       menu.appendChild(deleteBtn);
+      
+      // Get the bounding rectangle of the ellipsis button.
       const rect = event.target.getBoundingClientRect();
-      menu.style.left = rect.right + "px";
-      menu.style.top = rect.top + "px";
+      const menuWidth = 150; // estimated width of the menu
+      
+      // Position menu flush with the ellipsis button:
+      if (rect.right + menuWidth > window.innerWidth) {
+        menu.style.left = (rect.left - menuWidth + 2) + "px";
+      } else {
+        menu.style.left = (rect.right - 2) + "px";
+      }
+      menu.style.top = (rect.top + 2) + "px";
+      
       document.body.appendChild(menu);
+      
+      // Trigger smooth fade-in.
+      requestAnimationFrame(() => {
+        menu.style.opacity = "1";
+        menu.style.transform = "translateY(0px)";
+      });
+      
       editBtn.addEventListener("click", function() {
         const parentComment = event.target.closest(".review-item");
         if (parentComment) {
@@ -878,8 +1104,9 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           showModal('editModal');
         }
-        menu.parentNode.removeChild(menu);
+        if (menu.parentNode) menu.parentNode.removeChild(menu);
       });
+      
       deleteBtn.addEventListener("click", function() {
         const parentComment = event.target.closest(".review-item");
         if (parentComment) {
@@ -893,18 +1120,21 @@ document.addEventListener('DOMContentLoaded', function() {
           reviewItems = reviewItems.filter(item => item.id !== commentId);
           saveAnnotationToServer({ id: commentId, type: 'delete' }, currentTopic);
         }
-        menu.parentNode.removeChild(menu);
+        if (menu.parentNode) menu.parentNode.removeChild(menu);
       });
+      
+      // Clicking anywhere outside dismisses the menu.
       document.addEventListener("click", function handler(ev) {
         if (!menu.contains(ev.target)) {
-          if (menu.parentNode) {
-            menu.parentNode.removeChild(menu);
-          }
+          if (menu.parentNode) menu.parentNode.removeChild(menu);
           document.removeEventListener("click", handler);
         }
       });
     }
   });
+  
+  
+  
   
   function saveAnnotationToServer(changeObj, topic) {
     console.log("Calling saveAnnotationToServer");

@@ -257,11 +257,17 @@ io.on('connection', (socket) => {
   socket.on('cursor-update', (data) => {
     socket.to(data.room).emit('cursor-update', { id: socket.id, ...data });
   });
+
+  // NEW: Relay annotation changes to other clients in the room.
+  socket.on('annotation-change', (data) => {
+    socket.to(data.room).emit('annotation-change', data);
+  });
   
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
+
 
 const PORT = 3000;
 server.listen(PORT, () => {

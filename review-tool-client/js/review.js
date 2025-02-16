@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const subFolder = params.get("subFolder");
   let showPreviousComments = false;
   let currentTopic = localStorage.getItem("currentTopic") || "default";
+  let newAnnotationCount = 0;
   
   let selectedText = '';
   let selectedRange = null;
@@ -833,10 +834,29 @@ document.addEventListener('DOMContentLoaded', function() {
 socket.on('annotation-change', (data) => {
   // Ignore events sent by this client.
   if (data.id === socket.id) return;
+  // If the change is not for the current topic, ignore it.
+  if (data.topic && data.topic !== currentTopic) return;
   console.log('Received annotation change from another client:', data);
-  // Reload annotations so that concurrent changes are visible.
-  loadAnnotationsFromServer(currentTopic);
+  newAnnotationCount++;
+  updateCheckCommentsButton();
 });
+
+
+const checkCommentsButton = document.getElementById("checkCommentsButton");
+checkCommentsButton.addEventListener("click", function() {
+  loadAnnotationsFromServer(currentTopic);
+  newAnnotationCount = 0;
+  updateCheckCommentsButton();
+});
+
+function updateCheckCommentsButton() {
+  if (newAnnotationCount > 0) {
+    checkCommentsButton.textContent = `Check for comments (${newAnnotationCount})`;
+  } else {
+    checkCommentsButton.textContent = "Check for comments";
+  }
+}
+
   
   /*
   function saveAnnotationToServer(changeObj, topic) {
@@ -873,7 +893,8 @@ function saveAnnotationToServer(changeObj, topic) {
   socket.emit('annotation-change', {
     room: 'document-' + webhelpId + '-' + currentVersion,
     id: socket.id,
-    change: changeObj
+    change: changeObj,
+    topic: topic // include the current topic
   });
 
   fetch('/saveReviewChange', {

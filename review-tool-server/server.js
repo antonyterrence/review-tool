@@ -50,6 +50,25 @@ function writeAnnotations(data, webhelpId) {
   }
 }
 
+// Add this function near the top (after your require() calls but before the upload endpoint)
+function extractZip(sourcePath, destPath, callback) {
+  fs.createReadStream(sourcePath)
+    .pipe(unzipper.Parse())
+    .on('entry', function(entry) {
+      const entryPath = entry.path;
+      const fullPath = path.join(destPath, entryPath);
+      if (entry.type === 'Directory') {
+        fs.mkdirSync(fullPath, { recursive: true });
+        entry.autodrain();
+      } else {
+        fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+        entry.pipe(fs.createWriteStream(fullPath));
+      }
+    })
+    .on('close', callback)
+    .on('error', callback);
+}
+
 /**
  * ---------------------------
  * Document Upload Endpoint
@@ -75,53 +94,53 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
     const version = "v" + newVersionNumber;
     const targetDir = path.join(docDir, version);
     fs.mkdirSync(targetDir, { recursive: true });
-    fs.createReadStream(req.file.path)
-      .pipe(unzipper.Extract({ path: targetDir }))
-      .on('close', () => {
+    extractZip(req.file.path, targetDir, () => {
+      // Determine subFolder: if index.html exists at targetDir, leave subFolder empty;
+      // otherwise, if one or more directories exist, use the first.
+      let subFolder = "";
+      if (!fs.existsSync(path.join(targetDir, "index.html"))) {
         const items = fs.readdirSync(targetDir, { withFileTypes: true });
-        let subDirs = items.filter(item => item.isDirectory()).map(item => item.name);
-        let subFolder = subDirs.length > 0 ? subDirs[0] : "";
-        if (newVersionNumber > 1 && subFolder) {
-          const newSubFolder = subFolder + "_" + newVersionNumber;
-          const oldPath = path.join(targetDir, subFolder);
-          const newPath = path.join(targetDir, newSubFolder);
-          try {
-            fs.renameSync(oldPath, newPath);
-            subFolder = newSubFolder;
-          } catch (err) {
-            console.error("Error renaming subfolder:", err);
-          }
+        const subDirs = items.filter(item => item.isDirectory()).map(item => item.name);
+        if (subDirs.length > 0) {
+          subFolder = subDirs[0];
         }
-        let title = "";
-        const indexPath = path.join(targetDir, subFolder, "index.html");
-        if (fs.existsSync(indexPath)) {
-          const fileContent = fs.readFileSync(indexPath, "utf8");
-          const match = fileContent.match(/<title>(.*?)<\/title>/i);
-          title = match ? match[1] : "";
-        }
-        res.json({ webhelpId, version, title, subFolder });
-      });
+      }
+      // (Optional: if you need to rename the extracted subfolder for new versions, you can do that here)
+      let title = "";
+      const indexPath = subFolder ? path.join(targetDir, subFolder, "index.html") : path.join(targetDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        const fileContent = fs.readFileSync(indexPath, "utf8");
+        const match = fileContent.match(/<title>(.*?)<\/title>/i);
+        title = match ? match[1] : "";
+      }
+      res.json({ webhelpId, version, title, subFolder });
+    });
+    
   } else {
     // New document upload.
     const webhelpId = Date.now().toString();
     const version = 'v1';
     const targetDir = path.join(__dirname, 'webhelps', webhelpId, version);
     fs.mkdirSync(targetDir, { recursive: true });
-    fs.createReadStream(req.file.path)
-      .pipe(unzipper.Extract({ path: targetDir }))
-      .on('close', () => {
+    extractZip(req.file.path, targetDir, () => {
+      let subFolder = "";
+      if (!fs.existsSync(path.join(targetDir, "index.html"))) {
         const items = fs.readdirSync(targetDir, { withFileTypes: true });
         const subDirs = items.filter(item => item.isDirectory()).map(item => item.name);
-        const subFolder = subDirs.length > 0 ? subDirs[0] : "";
-        let title = "";
-        const indexPath = path.join(targetDir, subFolder, "index.html");
-        if (fs.existsSync(indexPath)) {
-          const fileContent = fs.readFileSync(indexPath, "utf8");
-          const match = fileContent.match(/<title>(.*?)<\/title>/i);
-          title = match ? match[1] : "";
+        if (subDirs.length > 0) {
+          subFolder = subDirs[0];
         }
-        res.json({ webhelpId, version, title, subFolder });
-      });
+      }
+      let title = "";
+      const indexPath = subFolder ? path.join(targetDir, subFolder, "index.html") : path.join(targetDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        const fileContent = fs.readFileSync(indexPath, "utf8");
+        const match = fileContent.match(/<title>(.*?)<\/title>/i);
+        title = match ? match[1] : "";
+      }
+      res.json({ webhelpId, version, title, subFolder });
+    });
+    
   }
 });
 

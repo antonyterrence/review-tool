@@ -571,7 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (type === 'comment') {
       content = data.text;
     } else if (type === 'deletion') {
-      content = "Deleted: " + (data.deletedText || data.deletedHtml || "");
+      content = "Deleted: <span class='deleted-text'>" + (data.deletedText || data.deletedHtml || "") + "</span>";
     } else if (type === 'highlight') {
       content = "Highlighted: <span class='text-highlight'>" + (data.highlightedText || data.highlightedHtml || "") + "</span>";
     } else if (type === 'replacement') {

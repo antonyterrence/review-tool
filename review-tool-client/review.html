@@ -107,7 +107,52 @@
     <button id="replaceConfirm">Replace</button>
     <button id="replaceCancel">Cancel</button>
   </div>
-  
+
+  <!-- Filter Modal -->
+<div id="filterModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close" onclick="closeFilterModal()">&times;</span>
+    <h2>Filter Annotations</h2>
+    
+    <div>
+      <label for="versionSelectModal">Version:</label>
+      <select id="versionSelectModal"></select>
+    </div>
+
+    <div>
+      <h3>Users</h3>
+      <ul id="userList"></ul>
+    </div>
+
+    <div>
+      <h3>Status</h3>
+      <input type="checkbox" id="statusAccepted" name="status" value="accepted">
+      <label for="statusAccepted">Accepted</label><br>
+      <input type="checkbox" id="statusRejected" name="status" value="rejected">
+      <label for="statusRejected">Rejected</label><br>
+      <input type="checkbox" id="statusResolved" name="status" value="resolved">
+      <label for="statusResolved">Resolved</label><br>
+      <input type="checkbox" id="statusOpen" name="status" value="open">
+      <label for="statusOpen">Open</label>
+    </div>
+
+    <div>
+      <h3>Annotation Types</h3>
+      <input type="checkbox" id="typeComment" name="type" value="comment">
+      <label for="typeComment">Comment</label><br>
+      <input type="checkbox" id="typeDelete" name="type" value="delete">
+      <label for="typeDelete">Delete</label><br>
+      <input type="checkbox" id="typeReplace" name="type" value="replace">
+      <label for="typeReplace">Replace</label><br>
+      <input type="checkbox" id="typeHighlight" name="type" value="highlight">
+      <label for="typeHighlight">Highlight</label>
+    </div>
+
+    <button onclick="applyFilters()">Apply Filters</button>
+    <button onclick="closeFilterModal()">Cancel</button>
+  </div>
+</div>
+-->
   
   <script src="js/review.js"></script>
 </body>

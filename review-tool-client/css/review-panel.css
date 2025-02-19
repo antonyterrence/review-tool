@@ -133,7 +133,7 @@ header {
     color: #333;
 }
 .review-item .timestamp,
-.review-item .annotation-timestamp {
+.review-item .annotation-timestamp, .review-item .annotation-version{
     font-size: 0.75em;
     color: #777;
 }

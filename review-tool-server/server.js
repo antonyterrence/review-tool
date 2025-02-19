@@ -54,22 +54,27 @@ function writeAnnotations(data, webhelpId) {
  * Updated Save Endpoint: Update annotation if exists, else push.
  */
 app.post('/saveReviewChange', (req, res) => {
-  const { webhelpId, version, topic, change } = req.body;
-  console.log("Received annotation for:", webhelpId, version, topic, change);
-  const annotations = readAnnotations(webhelpId);
-  if (!annotations[version]) annotations[version] = {};
-  if (!annotations[version][topic]) annotations[version][topic] = [];
-  
-  // Check if an annotation with this ID exists; if so, update it.
-  const index = annotations[version][topic].findIndex(item => item.id === change.id);
-  if (index !== -1) {
-    annotations[version][topic][index] = change;
-  } else {
-    annotations[version][topic].push(change);
+  try {
+    const { webhelpId, version, topic, change } = req.body;
+    console.log("Received annotation for:", webhelpId, version, topic, change);
+    const annotations = readAnnotations(webhelpId);
+    if (!annotations[version]) annotations[version] = {};
+    if (!annotations[version][topic]) annotations[version][topic] = [];
+
+    const index = annotations[version][topic].findIndex(item => item.id === change.id);
+    if (index !== -1) {
+      annotations[version][topic][index] = change;
+    } else {
+      annotations[version][topic].push(change);
+    }
+    writeAnnotations(annotations, webhelpId);
+    res.json({ status: 'ok' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  writeAnnotations(annotations, webhelpId);
-  res.json({ status: 'ok' });
 });
+
 
 app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;

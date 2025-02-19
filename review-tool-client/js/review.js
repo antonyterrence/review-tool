@@ -3,9 +3,9 @@ document.addEventListener('DOMContentLoaded', function() {
    * Global Variables and Topic Identification
    ************************************************/
   const params = new URLSearchParams(window.location.search);
-  const webhelpId = params.get("webhelpId");
-  const version = params.get("version"); // e.g. "v2"
-  const subFolder = params.get("subFolder");
+  window.webhelpId = params.get("webhelpId");
+  window.version = params.get("version"); // e.g. "v2"
+  window.subFolder = params.get("subFolder");
   let showPreviousComments = false;
   let currentTopic = localStorage.getItem("currentTopic") || "default";
   let newAnnotationCount = 0;
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const currentUserAnnotation = localStorage.getItem("currentUser") || "User1";
   
   const topicContent = document.getElementById("topicContent");
-  let currentVersion = version;
+  window.currentVersion = version;
   
   /************************************************
    * Version Selector Setup
@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
   /************************************************
    * Socket.IO Integration
    ************************************************/
-  const socket = io();
+  window.socket = io();
   socket.on('connect', () => {
     console.log('Connected to Socket.IO server:', socket.id);
     const room = 'document-' + webhelpId + '-' + currentVersion;
@@ -61,18 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
    * Global and Topic Cursor Indicators
    ************************************************/
   const topicCursorMarkers = {};
-  function updateGlobalActiveUsersDisplay() {
-    const container = document.getElementById('globalActiveUsers');
-    if (!container) return;
-    container.innerHTML = '';
-    Object.values(globalActiveUsers).forEach(userObj => {
-      const userDiv = document.createElement('div');
-      userDiv.className = 'global-user';
-      userDiv.textContent = userObj.user.charAt(0).toUpperCase();
-      userDiv.title = userObj.user;
-      container.appendChild(userDiv);
-    });
-  }
+  
   
   const otherCursorMarkers = {};
   socket.on('cursor-update', (data) => {
@@ -120,99 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }, 5000);
   
-  /************************************************
-   * Advanced Serialization Helper Functions
-   ************************************************/
-  function getXPathForNode(node, root) {
-    if (node === root) return ".";
-    let parts = [];
-    while (node && node !== root) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        let index = 1;
-        let sibling = node.previousSibling;
-        while (sibling) {
-          if (sibling.nodeType === Node.TEXT_NODE) index++;
-          sibling = sibling.previousSibling;
-        }
-        parts.unshift(`text()[${index}]`);
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        let index = 1;
-        let sibling = node.previousSibling;
-        while (sibling) {
-          if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === node.nodeName) index++;
-          sibling = sibling.previousSibling;
-        }
-        parts.unshift(node.nodeName.toLowerCase() + `[${index}]`);
-      }
-      node = node.parentNode;
-    }
-    return "./" + parts.join("/");
-  }
-  
-  function getNodeByXPath(xpath, root) {
-    let evaluator = new XPathEvaluator();
-    let result = evaluator.evaluate(xpath, root, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-    return result.singleNodeValue;
-  }
-  
-  function advancedSerializeRange(range) {
-    let commonAncestor = range.commonAncestorContainer;
-    if (commonAncestor.nodeType === Node.TEXT_NODE) {
-      commonAncestor = commonAncestor.parentNode;
-    }
-    if (commonAncestor && (commonAncestor.tagName === "OL" || commonAncestor.tagName === "UL")) {
-      const liElements = Array.from(commonAncestor.getElementsByTagName("li")).filter(li => {
-        let liRange = document.createRange();
-        liRange.selectNodeContents(li);
-        return range.compareBoundaryPoints(Range.START_TO_START, liRange) <= 0 &&
-               range.compareBoundaryPoints(Range.END_TO_END, liRange) >= 0;
-      });
-      if (liElements.length > 0) {
-        const container = document.createElement("div");
-        liElements.forEach(li => container.innerHTML += li.outerHTML);
-        return {
-          startXPath: getXPathForNode(liElements[0], topicContent),
-          startOffset: 0,
-          endXPath: getXPathForNode(liElements[liElements.length - 1], topicContent),
-          endOffset: liElements[liElements.length - 1].outerHTML.length,
-          html: container.innerHTML
-        };
-      }
-    }
-    const frag = range.cloneContents();
-    const div = document.createElement("div");
-    div.appendChild(frag);
-    return {
-      startXPath: getXPathForNode(range.startContainer, topicContent),
-      startOffset: range.startOffset,
-      endXPath: getXPathForNode(range.endContainer, topicContent),
-      endOffset: range.endOffset,
-      html: div.innerHTML
-    };
-  }
-  
-  function advancedDeserializeRange(serialized) {
-    const startNode = getNodeByXPath(serialized.startXPath, topicContent);
-    const endNode = getNodeByXPath(serialized.endXPath, topicContent);
-    if (!startNode || !endNode) return null;
-    const range = document.createRange();
-    try {
-      range.setStart(startNode, serialized.startOffset);
-      range.setEnd(endNode, serialized.endOffset);
-    } catch (e) {
-      console.error("Error deserializing range:", e);
-      return null;
-    }
-    return range;
-  }
-  
-  function serializeRange(range) {
-    return advancedSerializeRange(range);
-  }
-  
-  function deserializeRange(serialized) {
-    return advancedDeserializeRange(serialized);
-  }
+ 
   
   /************************************************
    * TOC & Topic Loading
@@ -321,34 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
   
-  function overrideTopicLinks() {
-    const topicDiv = document.getElementById("topicContent");
-    const links = topicDiv.querySelectorAll("a");
-    links.forEach(link => {
-      link.addEventListener("click", function(event) {
-        event.preventDefault();
-        const href = this.getAttribute("href");
-        currentTopic = href.replace('.html','');
-        localStorage.setItem("currentTopic", currentTopic);
-        const topicUrl = `/webhelp/${webhelpId}/${currentVersion}/${subFolder}/${href}`;
-        fetch(topicUrl)
-          .then(resp => {
-            if (!resp.ok) {
-              throw new Error("Network response was not ok: " + resp.statusText);
-            }
-            return resp.text();
-          })
-          .then(newTopicHtml => {
-            topicDiv.innerHTML = newTopicHtml;
-            overrideTopicLinks();
-            loadAnnotationsFromServer(currentTopic);
-          })
-          .catch(err => {
-            console.error("Error loading linked topic:", err);
-          });
-      });
-    });
-  }
+  
   
   /************************************************
    * Annotation, Context Menu, and Review Panel Features
@@ -357,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const overlay = document.getElementById("overlay");
   let currentReplyTarget = null;
   let currentEditTarget = null;
-  const annotationMap = new Map();
+  window.annotationMap = new Map();
   let reviewItems = [];
   
   topicContent.addEventListener('mousemove', (event) => {
@@ -371,154 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   
-  function isHeadingElement(elem) {
-    return elem && elem.tagName && /^H[1-6]$/.test(elem.tagName);
-  }
   
-  function reapplyCommentMarker(annotation) {
-    if (!annotation.range) return;
-    const range = advancedDeserializeRange(annotation.range);
-    if (range) {
-      const marker = document.createElement("span");
-      marker.className = "comment-marker";
-      marker.dataset.commentId = annotation.id;
-      marker.innerHTML = annotation.range.html || range.toString();
-      try {
-        range.surroundContents(marker);
-        annotationMap.set(annotation.id, marker);
-      } catch (e) {
-        console.error("Error reapplying comment marker:", e);
-      }
-    }
-  }
-  
-  function reapplyDeletionMarker(annotation) {
-    if (!annotation.range) return;
-    const range = advancedDeserializeRange(annotation.range);
-    if (!range) return;
-    const marker = document.createElement("span");
-    marker.className = "deleted-text";
-    marker.dataset.deletionId = annotation.id;
-    marker.innerHTML = annotation.deletedHtml || annotation.deletedText;
-    try {
-      range.deleteContents();
-      range.insertNode(marker);
-    } catch (e) {
-      console.error("Error reapplying deletion marker:", e);
-    }
-  }
-  
-  function reapplyHighlightMarker(annotation) {
-    if (!annotation.range) return;
-    const range = advancedDeserializeRange(annotation.range);
-    if (!range) return;
-    const marker = document.createElement("span");
-    marker.className = "annotator-hl";
-    marker.dataset.highlightId = annotation.id;
-    marker.innerHTML = annotation.highlightedHtml || annotation.highlightedText || range.toString();
-    try {
-      range.deleteContents();
-      range.insertNode(marker);
-    } catch (e) {
-      console.error("Error reapplying highlight marker:", e);
-    }
-  }
-  
-  function reapplyReplacementMarker(annotation) {
-    if (!annotation.range) return;
-    const range = advancedDeserializeRange(annotation.range);
-    if (!range) return;
-    const deletedSpan = document.createElement("span");
-    deletedSpan.className = "deleted-text";
-    deletedSpan.dataset.deletionId = annotation.id;
-    deletedSpan.innerHTML = annotation.oldHtml || annotation.oldText;
-    const insertedSpan = document.createElement("span");
-    insertedSpan.className = "inserted-text";
-    insertedSpan.textContent = annotation.newText;
-    try {
-      range.deleteContents();
-      range.insertNode(deletedSpan);
-      range.insertNode(document.createTextNode(" "));
-      range.insertNode(insertedSpan);
-    } catch (e) {
-      console.error("Error reapplying replacement marker:", e);
-    }
-  }
-  
-  // loadAnnotationsFromServer now uses the provided baseVersion.
-  function loadAnnotationsFromServer(topic, includePrevious = false, baseVersion = null) {
-    if (!topic) topic = "default";
-    currentTopic = topic;
-    localStorage.setItem("currentTopic", currentTopic);
-    let versionToUse = baseVersion ? baseVersion : version;
-    let url = `/getReviewChanges/${webhelpId}/${versionToUse}/${encodeURIComponent(topic)}`;
-    if (includePrevious) {
-      url += '?includePrevious=true';
-    }
-    fetch(url)
-      .then(response => response.json())
-      .then(flatAnnotations => {
-        const annotationsMap = {};
-        flatAnnotations.forEach(a => {
-          annotationsMap[a.id] = a;
-          a.replies = [];
-        });
-        const topAnnotations = [];
-        flatAnnotations.forEach(a => {
-          if (a.parentId) {
-            if (annotationsMap[a.parentId]) {
-              annotationsMap[a.parentId].replies.push(a);
-            }
-          } else {
-            topAnnotations.push(a);
-          }
-        });
-        const reviewList = document.getElementById("reviewList");
-        reviewList.innerHTML = "";
-        reviewItems = [];
-        topAnnotations.forEach(a => {
-          // Skip rendering if annotation is marked deleted or resolved
-          if (a.status === "deleted" || a.status === "resolved") {
-            return;
-          }
-          const item = createReviewItem(a.type, a);
-          if (a.type === 'comment' && a.range) {
-            reapplyCommentMarker(a);
-          } else if (a.type === 'deletion' && a.range) {
-            reapplyDeletionMarker(a);
-          } else if (a.type === 'highlight' && a.range) {
-            reapplyHighlightMarker(a);
-          } else if (a.type === 'replacement' && a.range) {
-            reapplyReplacementMarker(a);
-          }
-          // If status is accepted or rejected, add status icon
-          if (a.status === "accepted") {
-            addAnnotationStatusIcon(item, "accepted");
-          } else if (a.status === "rejected") {
-            addAnnotationStatusIcon(item, "rejected");
-          }
-  
-          if (a.replies && a.replies.length > 0) {
-            const replyContainer = item.querySelector('.reply-container');
-            if (replyContainer) {
-              a.replies.forEach(reply => {
-                if (reply.status === "deleted" || reply.status === "resolved") return;
-                const replyItem = createReplyItem(reply);
-                replyContainer.appendChild(replyItem);
-                reviewItems.push(reply);
-              });
-              paginateReplies(replyContainer);
-            }
-          }
-  
-          reviewList.appendChild(item);
-          reviewItems.push(a);
-        });
-      })
-      .catch(error => {
-        console.error("Error loading annotations from server:", error);
-      });
-  }
   
   window.addEventListener("load", () => {
     loadAnnotationsFromServer(currentTopic);
@@ -552,282 +275,172 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
-  // Helper function to format the timestamp
-  function formatTimestamp(ts) {
-    const d = new Date(ts);
-    if (isNaN(d)) return ts;
-    return d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }) + ", " +
-           d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  }
   
-  function createReviewItem(type, data) {
-    const item = document.createElement('div');
-    // Add the type as a class so that CSS rules (e.g., .review-item.comment) apply
-    item.classList.add('annotation-entry', 'review-item', type);
-    item.dataset.itemId = data.id;
-    item.dataset.type = type;
-    
-    let content = "";
-    if (type === 'comment') {
-      content = data.text;
-    } else if (type === 'deletion') {
-      content = "Deleted: <span class='deleted-text'>" + (data.deletedText || data.deletedHtml || "") + "</span>";
-    } else if (type === 'highlight') {
-      content = "Highlighted: <span class='text-highlight'>" + (data.highlightedText || data.highlightedHtml || "") + "</span>";
-    } else if (type === 'replacement') {
-      content = `<div>Replaced: <span class="deleted-text">${data.oldText || data.oldHtml || ""}</span></div>
-                 <div>With: <span class="replacement-text">${data.newText}</span></div>`;
-    }
-    
-    item.innerHTML = `
-      <div class="annotation-header author">
-        <div class="author-info">
-          <div class="annotation-username username">${data.user}</div>
-          <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
-        </div>
-        <button class="ellipsis-btn">…</button>
-      </div>
-      <div class="annotation-content text">${content}</div>
-      <div class="reply-container"></div>
-      <div class="inline-reply">
-        <textarea class="reply-textarea" placeholder="Reply"></textarea>
-        <div class="reply-buttons">
-          <button class="reply-cancel small-btn" disabled>Cancel</button>
-          <button class="reply-post small-btn" disabled>Post</button>
-        </div>
-      </div>
-    `;
-    
-    return item;
-  }
-  
-  function createReplyItem(data) {
-    const replyItem = document.createElement('div');
-    replyItem.classList.add('reply-item');
-    replyItem.dataset.itemId = data.id;
-    replyItem.innerHTML = `
-      <div class="annotation-header reply-header">
-        <div class="author-info">
-          <div class="annotation-username username">${data.user}</div>
-          <div class="annotation-timestamp timestamp">${formatTimestamp(data.timestamp)}</div>
-        </div>
-        <button class="reply-edit-btn small-btn">Edit</button>
-      </div>
-      <div class="annotation-content text reply-text">${data.text}</div>
-    `;
-    return replyItem;
-  }
-  
-  function paginateReplies(replyContainer) {
-    const batchSize = 2;
-    const replyItems = Array.from(replyContainer.querySelectorAll('.reply-item'));
-    if (replyItems.length > batchSize) {
-      replyItems.slice(batchSize).forEach(reply => {
-        reply.style.display = 'none';
-      });
-      const viewMoreBtn = document.createElement('button');
-      viewMoreBtn.textContent = 'View More';
-      viewMoreBtn.classList.add('view-more-btn', 'small-btn');
-      replyContainer.appendChild(viewMoreBtn);
-      
-      viewMoreBtn.addEventListener('click', () => {
-        const hiddenReplies = replyItems.filter(reply => reply.style.display === 'none');
-        const toShow = hiddenReplies.slice(0, batchSize);
-        toShow.forEach(reply => reply.style.display = 'block');
-        if (replyItems.every(reply => reply.style.display !== 'none')) {
-          viewMoreBtn.remove();
-        }
-      });
-    }
-  }
   
   // Ellipsis menu with options: Edit, Delete, Accept, Reject, Resolve
-  document.addEventListener("click", function(event) {
-    if (event.target && event.target.classList.contains("ellipsis-btn")) {
-      event.stopPropagation();
-      const existingMenu = document.querySelector(".comment-options-menu");
-      if (existingMenu) {
-        existingMenu.parentNode.removeChild(existingMenu);
-        return;
+  // Updated ellipsis menu event listener with rebuildAnnotation helper
+document.addEventListener("click", function(event) {
+  if (event.target && event.target.classList.contains("ellipsis-btn")) {
+    event.stopPropagation();
+    const existingMenu = document.querySelector(".comment-options-menu");
+    if (existingMenu) {
+      existingMenu.parentNode.removeChild(existingMenu);
+      return;
+    }
+    const parentAnnotation = event.target.closest(".review-item");
+    if (!parentAnnotation) return;
+    const annotationType = parentAnnotation.dataset.type;
+    const annotationId = parentAnnotation.dataset.itemId;
+
+    const menu = document.createElement("div");
+    menu.className = "comment-options-menu";
+    menu.style.position = "fixed";
+    menu.style.background = "white";
+    menu.style.border = "1px solid #ccc";
+    menu.style.boxShadow = "2px 2px 5px rgba(0,0,0,0.2)";
+    menu.style.padding = "2px";
+    menu.style.zIndex = "2000";
+    menu.style.opacity = "0";
+    menu.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit";
+    editBtn.style.margin = "2px 0";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "Delete";
+    deleteBtn.style.margin = "2px 0";
+
+    const acceptBtn = document.createElement("button");
+    acceptBtn.textContent = "Accept";
+    acceptBtn.style.margin = "2px 0";
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.textContent = "Reject";
+    rejectBtn.style.margin = "2px 0";
+
+    const resolveBtn = document.createElement("button");
+    resolveBtn.textContent = "Resolve";
+    resolveBtn.style.margin = "2px 0";
+
+    if (annotationType === "comment") {
+      menu.appendChild(editBtn);
+    }
+    menu.appendChild(deleteBtn);
+    menu.appendChild(acceptBtn);
+    menu.appendChild(rejectBtn);
+    menu.appendChild(resolveBtn);
+
+    const rect = event.target.getBoundingClientRect();
+    const menuWidth = 150;
+    if (rect.right + menuWidth > window.innerWidth) {
+      menu.style.left = (rect.left - menuWidth + 2) + "px";
+    } else {
+      menu.style.left = (rect.right - 2) + "px";
+    }
+    menu.style.top = (rect.top + 2) + "px";
+
+    document.body.appendChild(menu);
+    requestAnimationFrame(() => {
+      menu.style.opacity = "1";
+      menu.style.transform = "translateY(0px)";
+    });
+
+    editBtn.addEventListener("click", function() {
+      const textElem = parentAnnotation.querySelector(".text");
+      if (textElem) {
+        document.getElementById('editText').value = textElem.textContent;
       }
-      const parentAnnotation = event.target.closest(".review-item");
-      if (!parentAnnotation) return;
-      const annotationType = parentAnnotation.dataset.type;
-      const annotationId = parentAnnotation.dataset.itemId;
-      
-      const menu = document.createElement("div");
-      menu.className = "comment-options-menu";
-      menu.style.position = "fixed";
-      menu.style.background = "white";
-      menu.style.border = "1px solid #ccc";
-      menu.style.boxShadow = "2px 2px 5px rgba(0,0,0,0.2)";
-      menu.style.padding = "2px";
-      menu.style.zIndex = "2000";
-      menu.style.opacity = "0";
-      menu.style.transition = "opacity 0.2s ease, transform 0.2s ease";
-      
-      const editBtn = document.createElement("button");
-      editBtn.textContent = "Edit";
-      editBtn.style.margin = "2px 0";
-      
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Delete";
-      deleteBtn.style.margin = "2px 0";
-      
-      const acceptBtn = document.createElement("button");
-      acceptBtn.textContent = "Accept";
-      acceptBtn.style.margin = "2px 0";
-      
-      const rejectBtn = document.createElement("button");
-      rejectBtn.textContent = "Reject";
-      rejectBtn.style.margin = "2px 0";
-      
-      const resolveBtn = document.createElement("button");
-      resolveBtn.textContent = "Resolve";
-      resolveBtn.style.margin = "2px 0";
-      
-      if (annotationType === "comment") {
-        menu.appendChild(editBtn);
+      currentEditTarget = parentAnnotation;
+      showModal('editModal');
+      removeMenu();
+    });
+
+    deleteBtn.addEventListener("click", function() {
+      let annotationObj = reviewItems.find(item => item.id === annotationId);
+      if (!annotationObj) {
+        annotationObj = rebuildAnnotation(parentAnnotation);
       }
-      menu.appendChild(deleteBtn);
-      menu.appendChild(acceptBtn);
-      menu.appendChild(rejectBtn);
-      menu.appendChild(resolveBtn);
-      
-      const rect = event.target.getBoundingClientRect();
-      const menuWidth = 150;
-      if (rect.right + menuWidth > window.innerWidth) {
-        menu.style.left = (rect.left - menuWidth + 2) + "px";
-      } else {
-        menu.style.left = (rect.right - 2) + "px";
+      if (annotationObj) {
+        annotationObj.status = "deleted";
       }
-      menu.style.top = (rect.top + 2) + "px";
-      
-      document.body.appendChild(menu);
-      requestAnimationFrame(() => {
-        menu.style.opacity = "1";
-        menu.style.transform = "translateY(0px)";
-      });
-      
-      editBtn.addEventListener("click", function() {
-        const textElem = parentAnnotation.querySelector(".text");
-        if (textElem) {
-          document.getElementById('editText').value = textElem.textContent;
-        }
-        currentEditTarget = parentAnnotation;
-        showModal('editModal');
-        removeMenu();
-      });
-      
-      deleteBtn.addEventListener("click", function() {
-        // Mark annotation as deleted
-        const annotationObj = reviewItems.find(item => item.id === annotationId);
-        if (annotationObj) {
-          annotationObj.status = "deleted";
-        }
-        parentAnnotation.remove();
-        revertAnnotationText(annotationType, annotationId);
-        annotationMap.delete(annotationId);
-        reviewItems = reviewItems.filter(item => item.id !== annotationId);
-        saveAnnotationToServer(annotationObj, currentTopic);
-        removeMenu();
-      });
-      
-      acceptBtn.addEventListener("click", function() {
-        const annotationObj = reviewItems.find(item => item.id === annotationId);
-        if (annotationObj) {
-          annotationObj.status = "accepted";
-        }
+      parentAnnotation.remove();
+      revertAnnotationText(annotationType, annotationId);
+      annotationMap.delete(annotationId);
+      reviewItems = reviewItems.filter(item => item.id !== annotationId);
+      saveAnnotationToServer(annotationObj, currentTopic);
+      removeMenu();
+    });
+
+    acceptBtn.addEventListener("click", function() {
+      let annotationObj = reviewItems.find(item => item.id === annotationId);
+      if (!annotationObj) {
+        annotationObj = rebuildAnnotation(parentAnnotation);
+      }
+      if (annotationObj) {
+        annotationObj.status = "accepted";
         addAnnotationStatusIcon(parentAnnotation, "accepted");
         saveAnnotationToServer(annotationObj, currentTopic);
-        removeMenu();
-      });
-      
-      rejectBtn.addEventListener("click", function() {
-        const annotationObj = reviewItems.find(item => item.id === annotationId);
-        if (annotationObj) {
-          annotationObj.status = "rejected";
-        }
+      }
+      removeMenu();
+    });
+
+    rejectBtn.addEventListener("click", function() {
+      let annotationObj = reviewItems.find(item => item.id === annotationId);
+      if (!annotationObj) {
+        annotationObj = rebuildAnnotation(parentAnnotation);
+      }
+      if (annotationObj) {
+        annotationObj.status = "rejected";
         addAnnotationStatusIcon(parentAnnotation, "rejected");
         saveAnnotationToServer(annotationObj, currentTopic);
-        removeMenu();
-      });
-      
-      resolveBtn.addEventListener("click", function() {
-        const annotationObj = reviewItems.find(item => item.id === annotationId);
-        if (annotationObj) {
-          annotationObj.status = "resolved";
-        }
+      }
+      removeMenu();
+    });
+
+    resolveBtn.addEventListener("click", function() {
+      let annotationObj = reviewItems.find(item => item.id === annotationId);
+      if (!annotationObj) {
+        annotationObj = rebuildAnnotation(parentAnnotation);
+      }
+      if (annotationObj) {
+        annotationObj.status = "resolved";
         parentAnnotation.style.display = "none";
         saveAnnotationToServer(annotationObj, currentTopic);
+      }
+      removeMenu();
+    });
+
+    document.addEventListener("click", function handler(ev) {
+      if (!menu.contains(ev.target)) {
         removeMenu();
-      });
-      
-      document.addEventListener("click", function handler(ev) {
-        if (!menu.contains(ev.target)) {
-          removeMenu();
-          document.removeEventListener("click", handler);
-        }
-      });
-      
-      function removeMenu() {
-        if (menu.parentNode) {
-          menu.parentNode.removeChild(menu);
-        }
+        document.removeEventListener("click", handler);
+      }
+    });
+
+    function removeMenu() {
+      if (menu.parentNode) {
+        menu.parentNode.removeChild(menu);
       }
     }
-  });
-  
-  function addAnnotationStatusIcon(annotationItem, statusType) {
-    let existing = annotationItem.querySelector('.annotation-status');
-    if (existing) {
-      existing.remove();
-    }
-    const statusDiv = document.createElement('div');
-    statusDiv.classList.add('annotation-status');
-    if (statusType === 'accepted') {
-      statusDiv.textContent = '👍';
-      statusDiv.classList.add('status-accepted');
-    } else if (statusType === 'rejected') {
-      statusDiv.textContent = '👎';
-      statusDiv.classList.add('status-rejected');
-    }
-    annotationItem.style.position = 'relative';
-    statusDiv.style.position = 'absolute';
-    statusDiv.style.bottom = '8px';
-    statusDiv.style.left = '8px';
-    statusDiv.style.fontSize = '1.2em';
-    annotationItem.appendChild(statusDiv);
-  }
-  
-  function revertAnnotationText(annotationType, annotationId) {
-    if (annotationType === 'comment') {
-      const marker = document.querySelector(`.comment-marker[data-comment-id="${annotationId}"]`);
-      if (marker) {
-        marker.outerHTML = marker.textContent;
-      }
-    } else if (annotationType === 'highlight') {
-      const hlSpan = document.querySelector(`[data-highlight-id="${annotationId}"]`);
-      if (hlSpan) {
-        hlSpan.outerHTML = hlSpan.textContent;
-      }
-    } else if (annotationType === 'deletion') {
-      const deletedSpan = document.querySelector(`[data-deletion-id="${annotationId}"]`);
-      if (deletedSpan) {
-        deletedSpan.outerHTML = deletedSpan.textContent;
-      }
-    } else if (annotationType === 'replacement') {
-      const replacedItem = document.querySelector(`[data-deletion-id="${annotationId}"]`);
-      if (replacedItem) {
-        replacedItem.nextSibling?.remove();
-        const inserted = replacedItem.nextSibling;
-        if (inserted && inserted.classList.contains('inserted-text')) {
-          inserted.remove();
-        }
-        replacedItem.outerHTML = replacedItem.textContent;
-      }
+
+    function rebuildAnnotation(element) {
+      if (!element) return null;
+      const rebuilt = {
+        id: element.dataset.itemId,
+        type: element.dataset.type,
+        text: element.querySelector('.text') ? element.querySelector('.text').textContent : "",
+        user: currentUserAnnotation,
+        timestamp: new Date().toLocaleString(),
+        range: element.dataset.range ? JSON.parse(element.dataset.range) : undefined
+      };
+      reviewItems.push(rebuilt);
+      return rebuilt;
     }
   }
+});
+  
+  
 
   // Listen for annotation changes from other clients.
 // When another client makes a change, we reload annotations.
@@ -886,36 +499,7 @@ function updateCheckCommentsButton() {
   }*/
  // In your saveAnnotationToServer function, add an emit so that changes
 // are sent to other clients in the same room.
-function saveAnnotationToServer(changeObj, topic) {
-  if (!topic) topic = "default";
 
-  // Emit the change to other clients for concurrency.
-  socket.emit('annotation-change', {
-    room: 'document-' + webhelpId + '-' + currentVersion,
-    id: socket.id,
-    change: changeObj,
-    topic: topic // include the current topic
-  });
-
-  fetch('/saveReviewChange', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      webhelpId: webhelpId,
-      version: currentVersion,
-      topic: topic,
-      change: changeObj
-    })
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log("Annotation saved on server:", data);
-    })
-    .catch(error => {
-      console.error("Error saving annotation to server:", error);
-    });
-}
-  
   // Inline Reply & Edit Handlers (unchanged)
   document.getElementById('reviewList').addEventListener('input', function(event) {
     if (event.target.classList.contains('reply-textarea')) {
@@ -987,6 +571,26 @@ function saveAnnotationToServer(changeObj, topic) {
         replyTextDiv.textContent = newText;
         replyTextDiv.style.display = 'block';
         editContainer.style.display = 'none';
+  
+        // Find the reply annotation in reviewItems using its data attribute.
+        let replyAnnotation = reviewItems.find(item => item.id === replyItem.dataset.itemId);
+        if (replyAnnotation) {
+          replyAnnotation.text = newText;
+          replyAnnotation.timestamp = new Date().toLocaleString();
+        } else {
+          // Fallback: rebuild the reply annotation from the DOM.
+          replyAnnotation = {
+            id: replyItem.dataset.itemId,
+            type: replyItem.dataset.type, // should be 'reply'
+            text: newText,
+            user: currentUserAnnotation,
+            timestamp: new Date().toLocaleString(),
+            parentId: replyItem.closest('.review-item').dataset.itemId
+          };
+          reviewItems.push(replyAnnotation);
+        }
+        // Save the updated reply annotation to the server.
+        saveAnnotationToServer(replyAnnotation, currentTopic);
       }
     }
   
@@ -1033,6 +637,7 @@ function saveAnnotationToServer(changeObj, topic) {
       postBtn.style.fontWeight = 'normal';
     }
   });
+  
   
   document.getElementById('submitComment').addEventListener('click', () => {
     const text = document.getElementById('commentText').value.trim();
@@ -1088,7 +693,7 @@ function saveAnnotationToServer(changeObj, topic) {
     }
   });
   
-  document.getElementById('submitEdit').addEventListener('click', () => {
+  /*document.getElementById('submitEdit').addEventListener('click', () => {
     const text = document.getElementById('editText').value.trim();
     if (text && currentEditTarget) {
       const textElem = currentEditTarget.querySelector('.text');
@@ -1100,7 +705,45 @@ function saveAnnotationToServer(changeObj, topic) {
       saveAnnotationToServer(comment, currentTopic);
       closeModals();
     }
+  });*/
+
+  document.getElementById('submitEdit').addEventListener('click', () => {
+    const newText = document.getElementById('editText').value.trim();
+    if (newText && currentEditTarget) {
+      // Update the DOM element's text.
+      const textElem = currentEditTarget.querySelector('.text');
+      if (textElem) {
+        textElem.textContent = newText;
+      }
+      // Try to find the annotation object in reviewItems.
+      let annotation = reviewItems.find(item => item.id === currentEditTarget.dataset.itemId);
+      if (annotation) {
+        // Only update the text and timestamp.
+        annotation.text = newText;
+        annotation.timestamp = new Date().toLocaleString();
+      } else {
+        // Fallback: rebuild the annotation object using the data stored on the DOM element.
+        console.warn("Annotation not found in reviewItems; rebuilding annotation object.");
+        annotation = {
+          id: currentEditTarget.dataset.itemId,
+          type: currentEditTarget.dataset.type,
+          text: newText,
+          user: currentUserAnnotation, // assuming currentUserAnnotation is defined
+          timestamp: new Date().toLocaleString(),
+          // Preserve the range if it was stored as a data attribute.
+          range: currentEditTarget.dataset.range ? JSON.parse(currentEditTarget.dataset.range) : undefined
+        };
+        // Add the rebuilt annotation to reviewItems.
+        reviewItems.push(annotation);
+      }
+      // Send the updated annotation to the server.
+      saveAnnotationToServer(annotation, currentTopic);
+      closeModals();
+    }
   });
+  
+  
+  
   
   document.getElementById('cancelReply').addEventListener('click', closeModals);
   document.getElementById('cancelEdit').addEventListener('click', closeModals);
@@ -1254,19 +897,5 @@ function saveAnnotationToServer(changeObj, topic) {
     showModal('replaceModal');
   });
   
-  function showModal(modalId) {
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-    document.getElementById(modalId).style.display = 'block';
-    overlay.style.display = 'block';
-  }
-  
-  function closeModals() {
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-    overlay.style.display = 'none';
-    document.getElementById('commentText').value = '';
-    document.getElementById('replyText').value = '';
-    document.getElementById('editText').value = '';
-    currentReplyTarget = null;
-    currentEditTarget = null;
-  }
+ 
 });

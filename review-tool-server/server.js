@@ -51,7 +51,12 @@ function writeAnnotations(data, webhelpId) {
 }
 
 /**
- * Updated Save Endpoint: Update annotation if exists, else push.
+ * Updated Save Endpoint: Update annotation if it exists, else push a new one.
+ * Preserves the original `user` field if the annotation already exists.
+ */
+/**
+ * Updated Save Endpoint: Update annotation if it exists, else push a new one.
+ * This version preserves the original `user` field for existing annotations.
  */
 app.post('/saveReviewChange', (req, res) => {
   try {
@@ -61,10 +66,17 @@ app.post('/saveReviewChange', (req, res) => {
     if (!annotations[version]) annotations[version] = {};
     if (!annotations[version][topic]) annotations[version][topic] = [];
 
+    // Find the existing annotation by its id
     const index = annotations[version][topic].findIndex(item => item.id === change.id);
     if (index !== -1) {
+      // Preserve the original reviewer before updating the annotation.
+      const originalUser = annotations[version][topic][index].user;
+      // Update the annotation with the new change data
       annotations[version][topic][index] = change;
+      // Restore the original user (reviewer) so that the writer doesn't overwrite it.
+      annotations[version][topic][index].user = originalUser;
     } else {
+      // New annotation: use the change as provided.
       annotations[version][topic].push(change);
     }
     writeAnnotations(annotations, webhelpId);
@@ -74,6 +86,8 @@ app.post('/saveReviewChange', (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
 
 
 app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
@@ -170,6 +184,82 @@ app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   const filePath = path.join(__dirname, 'webhelps', webhelpId, version, topicPath);
   res.sendFile(filePath);
 });
+
+
+app.get('/getReviewMetrics/:webhelpId/:version', function(req, res) {
+  var webhelpId = req.params.webhelpId;
+  var versionParam = req.params.version;
+  var annotations = readAnnotations(webhelpId);
+  var perReviewerPerVersion = {};
+
+  if (versionParam.toLowerCase() === 'all') {
+    // Loop over all versions.
+    Object.keys(annotations).forEach(function(v) {
+      var versionAnnotations = annotations[v] || {};
+      Object.keys(versionAnnotations).forEach(function(topic) {
+        var annotationArray = versionAnnotations[topic];
+        annotationArray.forEach(function(ann) {
+          var reviewer = ann.user || 'Unknown';
+          if (!perReviewerPerVersion[reviewer]) {
+            perReviewerPerVersion[reviewer] = {};
+          }
+          if (!perReviewerPerVersion[reviewer][v]) {
+            perReviewerPerVersion[reviewer][v] = { total: 0, accepted: 0, rejected: 0, resolved: 0, open: 0 };
+          }
+          perReviewerPerVersion[reviewer][v].total++;
+          switch(ann.status) {
+            case 'accepted':
+              perReviewerPerVersion[reviewer][v].accepted++;
+              break;
+            case 'rejected':
+              perReviewerPerVersion[reviewer][v].rejected++;
+              break;
+            case 'resolved':
+              perReviewerPerVersion[reviewer][v].resolved++;
+              break;
+            default:
+              perReviewerPerVersion[reviewer][v].open++;
+          }
+        });
+      });
+    });
+  } else {
+    // Only one version requested.
+    var versionAnnotations = annotations[versionParam] || {};
+    Object.keys(versionAnnotations).forEach(function(topic) {
+      var annotationArray = versionAnnotations[topic];
+      annotationArray.forEach(function(ann) {
+        var reviewer = ann.user || 'Unknown';
+        if (!perReviewerPerVersion[reviewer]) {
+          perReviewerPerVersion[reviewer] = {};
+        }
+        if (!perReviewerPerVersion[reviewer][versionParam]) {
+          perReviewerPerVersion[reviewer][versionParam] = { total: 0, accepted: 0, rejected: 0, resolved: 0, open: 0 };
+        }
+        perReviewerPerVersion[reviewer][versionParam].total++;
+        switch(ann.status) {
+          case 'accepted':
+            perReviewerPerVersion[reviewer][versionParam].accepted++;
+            break;
+          case 'rejected':
+            perReviewerPerVersion[reviewer][versionParam].rejected++;
+            break;
+          case 'resolved':
+            perReviewerPerVersion[reviewer][versionParam].resolved++;
+            break;
+          default:
+            perReviewerPerVersion[reviewer][versionParam].open++;
+        }
+      });
+    });
+  }
+  
+  res.json({
+    perReviewerPerVersion: perReviewerPerVersion
+  });
+});
+
+
 
 function extractZip(sourcePath, destPath, callback) {
   fs.createReadStream(sourcePath)

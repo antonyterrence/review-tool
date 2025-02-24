@@ -529,3 +529,107 @@ header {
   border-radius: 3px;
   white-space: nowrap;
 }
+
+.needs-review {
+  background-color: #ffe6e6;
+  font-weight: bold;
+}
+.review-toggle {
+  margin-left: 5px;
+  font-size: 0.8em;
+}
+
+.review-box {
+  position: absolute;
+  border: 2px solid red;
+  background: rgba(255, 0, 0, 0.1);
+  pointer-events: none;
+}
+.review-box::after {
+  content: 'Needs Review';
+  position: absolute;
+  top: -20px;
+  left: 0;
+  background: red;
+  color: white;
+  padding: 2px 5px;
+  font-size: 0.8em;
+}
+
+/* ... [Existing styles remain unchanged] ... */
+
+#tocContextMenu {
+  display: none;
+  position: fixed;
+  background: white;
+  border: 1px solid #ccc;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+  z-index: 1000;
+}
+
+#tocContextMenu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+#tocContextMenu button:hover {
+  background: #f0f0f0;
+}
+
+.small-btn {
+  font-size: 0.8em;
+  padding: 4px 8px;
+  margin-left: 5px;
+  cursor: pointer;
+}
+
+.review-line {
+  position: absolute;
+  border: 2px solid red;
+  background: rgba(255, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+
+
+
+.review-box {
+  position: absolute;
+  border: 2px solid red;
+  background: transparent; /* Remove red overlay */
+  cursor: move; /* Indicate movability */
+}
+
+
+
+.review-line {
+  position: absolute;
+  border: none;
+  border-top: 2px solid red; /* Outline only */
+  background: transparent;
+  cursor: move;
+}
+
+.review-line:hover {
+  border-color: blue;
+}
+
+.draw-btn {
+  font-size: 1.2em;
+  margin-left: 5px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.draw-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.draw-btn.active {
+  background-color: #ddd;
+}

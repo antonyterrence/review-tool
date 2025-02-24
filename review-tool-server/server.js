@@ -10,37 +10,37 @@ const socketIo = require('socket.io');
 const app = express();
 app.use(bodyParser.json());
 
-// Serve static files from the review-tool-client folder.
+// Serve static files from the review-tool-client folder
 app.use(express.static(path.join(__dirname, '../review-tool-client')));
 
-// Configure multer for file uploads.
+// Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
 
 /**
- * ---------------------------
  * Annotations Persistence
- * ---------------------------
  */
 const annotationsDir = path.join(__dirname, 'annotations');
 if (!fs.existsSync(annotationsDir)) {
   fs.mkdirSync(annotationsDir);
 }
+
 function getAnnotationsFile(webhelpId) {
   return path.join(annotationsDir, `${webhelpId}.json`);
 }
+
 function readAnnotations(webhelpId) {
   const filePath = getAnnotationsFile(webhelpId);
   try {
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, '{}', 'utf8');
     }
-    const data = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(data);
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (err) {
     console.error("Error reading annotations file:", err);
     return {};
   }
 }
+
 function writeAnnotations(data, webhelpId) {
   const filePath = getAnnotationsFile(webhelpId);
   try {
@@ -50,14 +50,6 @@ function writeAnnotations(data, webhelpId) {
   }
 }
 
-/**
- * Updated Save Endpoint: Update annotation if it exists, else push a new one.
- * Preserves the original `user` field if the annotation already exists.
- */
-/**
- * Updated Save Endpoint: Update annotation if it exists, else push a new one.
- * This version preserves the original `user` field for existing annotations.
- */
 app.post('/saveReviewChange', (req, res) => {
   try {
     const { webhelpId, version, topic, change } = req.body;
@@ -66,17 +58,12 @@ app.post('/saveReviewChange', (req, res) => {
     if (!annotations[version]) annotations[version] = {};
     if (!annotations[version][topic]) annotations[version][topic] = [];
 
-    // Find the existing annotation by its id
     const index = annotations[version][topic].findIndex(item => item.id === change.id);
     if (index !== -1) {
-      // Preserve the original reviewer before updating the annotation.
       const originalUser = annotations[version][topic][index].user;
-      // Update the annotation with the new change data
       annotations[version][topic][index] = change;
-      // Restore the original user (reviewer) so that the writer doesn't overwrite it.
-      annotations[version][topic][index].user = originalUser;
+      annotations[version][topic][index].user = originalUser; // Preserve original user
     } else {
-      // New annotation: use the change as provided.
       annotations[version][topic].push(change);
     }
     writeAnnotations(annotations, webhelpId);
@@ -86,9 +73,6 @@ app.post('/saveReviewChange', (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
-
 
 app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
@@ -111,9 +95,7 @@ app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
 });
 
 /**
- * ---------------------------
  * Document Upload Endpoint
- * ---------------------------
  */
 app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
   if (req.body.docId) {
@@ -185,21 +167,19 @@ app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   res.sendFile(filePath);
 });
 
-
 app.get('/getReviewMetrics/:webhelpId/:version', function(req, res) {
-  var webhelpId = req.params.webhelpId;
-  var versionParam = req.params.version;
-  var annotations = readAnnotations(webhelpId);
-  var perReviewerPerVersion = {};
+  const webhelpId = req.params.webhelpId;
+  const versionParam = req.params.version;
+  const annotations = readAnnotations(webhelpId);
+  const perReviewerPerVersion = {};
 
   if (versionParam.toLowerCase() === 'all') {
-    // Loop over all versions.
     Object.keys(annotations).forEach(function(v) {
-      var versionAnnotations = annotations[v] || {};
+      const versionAnnotations = annotations[v] || {};
       Object.keys(versionAnnotations).forEach(function(topic) {
-        var annotationArray = versionAnnotations[topic];
+        const annotationArray = versionAnnotations[topic];
         annotationArray.forEach(function(ann) {
-          var reviewer = ann.user || 'Unknown';
+          const reviewer = ann.user || 'Unknown';
           if (!perReviewerPerVersion[reviewer]) {
             perReviewerPerVersion[reviewer] = {};
           }
@@ -224,12 +204,11 @@ app.get('/getReviewMetrics/:webhelpId/:version', function(req, res) {
       });
     });
   } else {
-    // Only one version requested.
-    var versionAnnotations = annotations[versionParam] || {};
+    const versionAnnotations = annotations[versionParam] || {};
     Object.keys(versionAnnotations).forEach(function(topic) {
-      var annotationArray = versionAnnotations[topic];
+      const annotationArray = versionAnnotations[topic];
       annotationArray.forEach(function(ann) {
-        var reviewer = ann.user || 'Unknown';
+        const reviewer = ann.user || 'Unknown';
         if (!perReviewerPerVersion[reviewer]) {
           perReviewerPerVersion[reviewer] = {};
         }
@@ -254,12 +233,8 @@ app.get('/getReviewMetrics/:webhelpId/:version', function(req, res) {
     });
   }
   
-  res.json({
-    perReviewerPerVersion: perReviewerPerVersion
-  });
+  res.json({ perReviewerPerVersion });
 });
-
-
 
 function extractZip(sourcePath, destPath, callback) {
   fs.createReadStream(sourcePath)
@@ -280,9 +255,7 @@ function extractZip(sourcePath, destPath, callback) {
 }
 
 /**
- * ---------------------------
- * Document Records Persistence (shared across clients)
- * ---------------------------
+ * Document Records Persistence
  */
 const documentsFile = path.join(__dirname, 'documents.json');
 function readDocuments() {
@@ -290,13 +263,13 @@ function readDocuments() {
     if (!fs.existsSync(documentsFile)) {
       fs.writeFileSync(documentsFile, '[]', 'utf8');
     }
-    const data = fs.readFileSync(documentsFile, 'utf8');
-    return JSON.parse(data);
+    return JSON.parse(fs.readFileSync(documentsFile, 'utf8'));
   } catch (err) {
     console.error("Error reading documents file:", err);
     return [];
   }
 }
+
 function writeDocuments(docs) {
   try {
     fs.writeFileSync(documentsFile, JSON.stringify(docs, null, 2), 'utf8');
@@ -304,10 +277,12 @@ function writeDocuments(docs) {
     console.error("Error writing documents file:", err);
   }
 }
+
 app.get('/getDocuments', (req, res) => {
   const docs = readDocuments();
   res.json(docs);
 });
+
 app.post('/saveDocument', (req, res) => {
   const doc = req.body;
   const docs = readDocuments();
@@ -315,6 +290,7 @@ app.post('/saveDocument', (req, res) => {
   writeDocuments(docs);
   res.json({ status: 'ok' });
 });
+
 app.post('/updateDocument', (req, res) => {
   const { docId, newVersion } = req.body;
   const docs = readDocuments();
@@ -329,9 +305,57 @@ app.post('/updateDocument', (req, res) => {
 });
 
 /**
- * ---------------------------
+ * Topic Review Persistence
+ */
+const topicReviewDir = path.join(__dirname, 'topic_reviews');
+if (!fs.existsSync(topicReviewDir)) {
+  fs.mkdirSync(topicReviewDir);
+}
+
+function getTopicReviewFile(webhelpId) {
+  return path.join(topicReviewDir, `${webhelpId}_topics.json`);
+}
+
+function readTopicReviews(webhelpId) {
+  const filePath = getTopicReviewFile(webhelpId);
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, '{}', 'utf8');
+    }
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    console.error("Error reading topic reviews:", err);
+    return {};
+  }
+}
+
+function writeTopicReviews(webhelpId, data) {
+  const filePath = getTopicReviewFile(webhelpId);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error("Error writing topic reviews:", err);
+  }
+}
+
+app.post('/markTopicForReview', (req, res) => {
+  const { webhelpId, version, topic, needsReview } = req.body;
+  const reviews = readTopicReviews(webhelpId);
+  if (!reviews[version]) reviews[version] = {};
+  reviews[version][topic] = { needsReview: needsReview, markedBy: req.body.user || 'Unknown', timestamp: Date.now() };
+  writeTopicReviews(webhelpId, reviews);
+  io.to(`document-${webhelpId}-${version}`).emit('topic-review-update', { topic, needsReview });
+  res.json({ status: 'ok' });
+});
+
+app.get('/getTopicsForReview/:webhelpId/:version', (req, res) => {
+  const { webhelpId, version } = req.params;
+  const reviews = readTopicReviews(webhelpId);
+  res.json(reviews[version] || {});
+});
+
+/**
  * Socket.IO Integration
- * ---------------------------
  */
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -353,7 +377,6 @@ io.on('connection', (socket) => {
     socket.to(data.room).emit('cursor-update', { id: socket.id, ...data });
   });
 
-  // NEW: Relay annotation changes to other clients in the room.
   socket.on('annotation-change', (data) => {
     socket.to(data.room).emit('annotation-change', data);
   });
@@ -362,7 +385,6 @@ io.on('connection', (socket) => {
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
-
 
 const PORT = 3000;
 server.listen(PORT, () => {

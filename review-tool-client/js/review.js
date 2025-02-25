@@ -251,25 +251,54 @@ document.addEventListener('DOMContentLoaded', function() {
   window.reviewItems = [];
 
   const header = document.querySelector('header');
+ 
+ 
+  
   const copyLinksBtn = document.createElement('button');
   copyLinksBtn.textContent = 'Copy Review Links';
   copyLinksBtn.className = 'small-btn';
-  header.appendChild(copyLinksBtn);
+  document.querySelector('header .header-container').appendChild(copyLinksBtn);
+
+
   copyLinksBtn.addEventListener('click', () => {
+    // Fetch topic-level review marks
     fetch(`/getTopicsForReview/${webhelpId}/${currentVersion}`)
       .then(response => response.json())
-      .then(reviews => {
-        const markedTopics = Object.entries(reviews)
+      .then(topicReviews => {
+        const topicLevelLinks = Object.entries(topicReviews)
           .filter(([_, data]) => data.needsReview)
           .map(([topic]) => `${window.location.origin}/review.html?webhelpId=${webhelpId}&version=${currentVersion}&subFolder=${subFolder}&topic=${topic}`);
-        if (markedTopics.length === 0) {
+  
+        // Gather element-level links by iterating over TOC links
+        const tocLinks = document.querySelectorAll("#tocList a");
+        const elementLinkPromises = Array.from(tocLinks).map(link => {
+          const topic = link.getAttribute("href").replace('.html', '');
+          return fetch(`/getReviewMarks/${webhelpId}/${currentVersion}/${encodeURIComponent(topic)}`)
+            .then(resp => resp.json())
+            .then(marks => {
+              // If there are any element-level marks, generate a link for that topic
+              return marks.length ? [`${window.location.origin}/review.html?webhelpId=${webhelpId}&version=${currentVersion}&subFolder=${subFolder}&topic=${topic}`] : [];
+            });
+        });
+        return Promise.all(elementLinkPromises).then(elementLinksArr => {
+          const elementLevelLinks = elementLinksArr.flat();
+          // Combine both arrays
+          return topicLevelLinks.concat(elementLevelLinks);
+        });
+      })
+      .then(allLinks => {
+        if (allLinks.length === 0) {
           alert('No topics marked for review.');
           return;
         }
-        navigator.clipboard.writeText(markedTopics.join('\n'))
-          .then(() => alert('Links copied to clipboard!'));
+        // Remove duplicate links.
+        const uniqueLinks = [...new Set(allLinks)];
+        navigator.clipboard.writeText(uniqueLinks.join('\n'))
+          .then(() => alert('Links copied to clipboard!'))
+          .catch(err => console.error("Clipboard error:", err));
       })
-      .catch(err => console.error("Error fetching topics for review:", err));
+      
+      .catch(err => console.error("Error fetching review marks:", err));
   });
 
   topicContent.addEventListener('mousemove', (event) => {
@@ -311,6 +340,8 @@ document.addEventListener('DOMContentLoaded', function() {
       currentVersion = selected;
       loadAnnotationsFromServer(currentTopic, false, currentVersion);
     }
+    // Refresh review marks when the version changes.
+  loadReviewMarks();
   });
 
   document.addEventListener("click", function(event) {

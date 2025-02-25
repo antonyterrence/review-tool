@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   document.getElementById("topicContent").innerHTML = topicHtml;
                   overrideTopicLinks();
                   loadAnnotationsFromServer(currentTopic);
+                  loadReviewMarks();
                 })
                 .catch(err => {
                   console.error("Error loading topic:", err);
@@ -194,6 +195,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById("topicContent").innerHTML = topicHtml;
                     overrideTopicLinks();
                     loadAnnotationsFromServer(currentTopic);
+                    loadReviewMarks();
                   })
                   .catch(err => {
                     console.error("Error loading topic:", err);
@@ -838,4 +840,98 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('replaceFrom').value = selectedText;
     showModal('replaceModal');
   });
+
+  const markTextBtn = document.getElementById('markTextForReviewButton');
+if (markTextBtn) {
+  markTextBtn.addEventListener('click', () => {
+    if (selectedRange && !selectedRange.collapsed) {
+      try {
+        // Clone the range and serialize it BEFORE modifying the DOM
+        const clonedRange = selectedRange.cloneRange();
+        const serialized = advancedSerializeRange(clonedRange);
+
+        // Now wrap the selected content in a <span>
+        const span = document.createElement('span');
+        span.classList.add('marked-for-review');
+        span.appendChild(clonedRange.extractContents());
+        clonedRange.insertNode(span);
+
+        markCurrentTopicAsNeedsReview();
+
+        // Build and persist the review mark object using the serialized data
+        const reviewMark = {
+          id: Date.now().toString(), // unique ID
+          type: 'review-mark-text',
+          user: currentUserAnnotation,
+          timestamp: new Date().toISOString(),
+          range: serialized,  // use the serialized data captured before DOM manipulation
+          webhelpId: webhelpId,
+          version: currentVersion,
+          topic: currentTopic
+        };
+        saveReviewMark(reviewMark);
+      } catch (err) {
+        console.error("Error while marking text for review:", err);
+      } finally {
+        contextMenu.style.display = 'none';
+      }
+    }
+  });
+}
+
+
+
+const markElementBtn = document.getElementById('markElementForReviewButton');
+if (markElementBtn) {
+  markElementBtn.addEventListener('click', () => {
+    try {
+      const sel = window.getSelection();
+      if (!sel || !sel.anchorNode) return;
+      const baseElem = (sel.anchorNode.nodeType === Node.TEXT_NODE)
+                         ? sel.anchorNode.parentElement
+                         : sel.anchorNode;
+      // Choose the nearest block element (adjust selector as needed)
+      const blockElem = baseElem.closest('p, h1, h2, h3, li, div, blockquote, section, table, td');
+      if (blockElem) {
+        blockElem.classList.add('marked-for-review');
+        markCurrentTopicAsNeedsReview();
+
+        // Use an XPath to later reapply the mark.
+        // Assume getXPathForNode is available from review-lib.js.
+        const xpath = getXPathForNode(blockElem, document.getElementById("topicContent"));
+
+        const reviewMark = {
+          id: Date.now().toString(),
+          type: 'review-mark-element',
+          user: currentUserAnnotation,
+          timestamp: new Date().toISOString(),
+          xpath: xpath,  // store location relative to topicContent
+          webhelpId: webhelpId,
+          version: currentVersion,
+          topic: currentTopic
+        };
+        saveReviewMark(reviewMark);
+      }
+    } catch (err) {
+      console.error("Error while marking element for review:", err);
+    } finally {
+      contextMenu.style.display = 'none';
+    }
+  });
+}
+
+
+// Toggle pink highlights for ".marked-for-review"
+const toggleBtn = document.getElementById('toggleReviewHighlightsBtn');
+if (toggleBtn) {
+  toggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('hide-review-highlights');
+    const isHidden = document.body.classList.contains('hide-review-highlights');
+    toggleBtn.textContent = isHidden ? 'Show Review Highlights' : 'Hide Review Highlights';
+  });
+}
+
+
+
+  
 });

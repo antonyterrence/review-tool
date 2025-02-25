@@ -1,3 +1,5 @@
+
+
 const express = require('express');
 const multer = require('multer');
 const unzipper = require('unzipper');
@@ -7,11 +9,15 @@ const bodyParser = require('body-parser');
 const http = require('http');
 const socketIo = require('socket.io');
 
+
 const app = express();
-app.use(bodyParser.json());
+//app.use(bodyParser.json());
+app.use(express.json());
 
 // Serve static files from the review-tool-client folder
 app.use(express.static(path.join(__dirname, '../review-tool-client')));
+const reviewMarksRouter = require('./components/review-marks');
+app.use('/', reviewMarksRouter);
 
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });

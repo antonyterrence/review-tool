@@ -469,3 +469,75 @@ function updateTOCWithReviewStatus() {
     })
     .catch(err => console.error("Error syncing TOC review status:", err));
 }
+
+function markCurrentTopicAsNeedsReview() {
+  const link = document.querySelector(`#tocList a[href="${currentTopic}.html"]`);
+  if (!link) return;
+  if (!link.classList.contains('needs-review')) {
+    fetch('/markTopicForReview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        webhelpId,
+        version: currentVersion,
+        topic: currentTopic,
+        needsReview: true,
+        user: currentUserAnnotation
+      })
+    })
+    .then(() => { link.classList.add('needs-review'); })
+    .catch(err => console.error("Error marking topic for review:", err));
+  }
+}
+
+function saveReviewMark(markObj) {
+  fetch('/saveReviewMarks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(markObj)
+  })
+  .then(response => response.json())
+  .then(data => console.log('Review mark saved:', data))
+  .catch(error => console.error('Error saving review mark:', error));
+}
+
+function loadReviewMarks() {
+  // Construct the URL based on the global variables
+  const url = `/getReviewMarks/${webhelpId}/${currentVersion}/${currentTopic}`;
+  fetch(url)
+    .then(response => response.json())
+    .then(marks => {
+      marks.forEach(mark => {
+        if (mark.type === 'review-mark-text' && mark.range) {
+          // Reapply a text highlight by recreating the Range from the serialized data.
+          const range = advancedDeserializeRange(mark.range);
+          if (range) {
+            // Create a new span element with the appropriate class
+            const span = document.createElement('span');
+            span.classList.add('marked-for-review');
+            // Use the stored HTML if available or fallback to the range's text
+            span.innerHTML = mark.range.html || range.toString();
+            try {
+              range.deleteContents();
+              range.insertNode(span);
+            } catch (e) {
+              console.error("Error reapplying review mark (text):", e);
+            }
+          }
+        } else if (mark.type === 'review-mark-element' && mark.xpath) {
+          // For element marks, locate the element via its XPath
+          const target = getNodeByXPath(mark.xpath, document.getElementById("topicContent"));
+          if (target && target.nodeType === Node.ELEMENT_NODE) {
+            target.classList.add('marked-for-review');
+          }
+        }
+      });
+    })
+    .catch(err => console.error("Error loading review marks:", err));
+}
+
+
+
+
+
+

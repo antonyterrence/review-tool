@@ -633,3 +633,14 @@ header {
 .draw-btn.active {
   background-color: #ddd;
 }
+
+/* 1) Pale pink background for partial review marks */
+.marked-for-review {
+  background-color: #ffe6f0;
+}
+
+/* 2) When body has .hide-review-highlights, override pink background */
+.hide-review-highlights .marked-for-review {
+  background-color: transparent !important;
+}
+

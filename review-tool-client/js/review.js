@@ -293,9 +293,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // Remove duplicate links.
         const uniqueLinks = [...new Set(allLinks)];
-        navigator.clipboard.writeText(uniqueLinks.join('\n'))
-          .then(() => alert('Links copied to clipboard!'))
-          .catch(err => console.error("Clipboard error:", err));
+        copyTextToClipboard(uniqueLinks.join('\n'))
+        .then(() => alert('Links copied to clipboard!'))
+        .catch(err => {
+          console.error("Copy failed:", err);
+          alert("Failed to copy links.");
+        });
       })
       
       .catch(err => console.error("Error fetching review marks:", err));

@@ -6,4 +6,4 @@ uploads/**
 *.jpg
 *.png
 review-tool-server/documents.json
-review-tool-server/webhelps/**
+review-tool-server/data/**

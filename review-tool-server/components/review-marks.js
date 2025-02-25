@@ -3,12 +3,20 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 
+// Define base directory as "data" folder in the project root
+const baseDir = path.join(__dirname, '../data');
+if (!fs.existsSync(baseDir)) {
+  fs.mkdirSync(baseDir, { recursive: true });
+}
+
+// Now, create the topic_reviews folder under the data folder.
+const folder = path.join(baseDir, 'topic_reviews');
+if (!fs.existsSync(folder)) {
+  fs.mkdirSync(folder, { recursive: true });
+}
+
 // Helper to get the file path for a document's review marks
 function getReviewMarksFile(webhelpId) {
-  const folder = path.join(__dirname, '../topic_reviews');
-  if (!fs.existsSync(folder)) {
-    fs.mkdirSync(folder, { recursive: true });
-  }
   return path.join(folder, `${webhelpId}_review-marks.json`);
 }
 
@@ -53,18 +61,16 @@ router.post('/saveReviewMarks', (req, res) => {
 });
 
 // GET: Retrieve review marks for a given document/topic
-// GET: Retrieve review marks for a given document/topic
 router.get('/getReviewMarks/:webhelpId/:version/*', (req, res) => {
-    const { webhelpId, version } = req.params;
-    // req.params[0] captures the rest of the URL (the topic) even if it contains slashes.
-    const topic = decodeURIComponent(req.params[0]);
-    let marks = readReviewMarks(webhelpId);
-    marks = marks.filter(mark =>
-      mark.version === version &&
-      mark.topic === topic
-    );
-    res.json(marks);
-  });
-  
+  const { webhelpId, version } = req.params;
+  // req.params[0] captures the rest of the URL (the topic) even if it contains slashes.
+  const topic = decodeURIComponent(req.params[0]);
+  let marks = readReviewMarks(webhelpId);
+  marks = marks.filter(mark =>
+    mark.version === version &&
+    mark.topic === topic
+  );
+  res.json(marks);
+});
 
 module.exports = router;

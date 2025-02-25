@@ -8,6 +8,11 @@ const fs = require('fs');
 const bodyParser = require('body-parser');
 const http = require('http');
 const socketIo = require('socket.io');
+const baseDir = path.join(__dirname, 'data');
+
+if (!fs.existsSync(baseDir)) {
+  fs.mkdirSync(baseDir, { recursive: true });
+}
 
 
 const app = express();
@@ -20,12 +25,16 @@ const reviewMarksRouter = require('./components/review-marks');
 app.use('/', reviewMarksRouter);
 
 // Configure multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+//const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: path.join(baseDir, 'uploads') });
+
 
 /**
  * Annotations Persistence
  */
-const annotationsDir = path.join(__dirname, 'annotations');
+//const annotationsDir = path.join(__dirname, 'annotations');
+const annotationsDir = path.join(baseDir, 'annotations');
+
 if (!fs.existsSync(annotationsDir)) {
   fs.mkdirSync(annotationsDir);
 }
@@ -107,7 +116,7 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
   // Check if this is an update (existing document)
   if (req.body.docId) {
     const webhelpId = req.body.docId;
-    const docDir = path.join(__dirname, 'webhelps', webhelpId);
+    const docDir = path.join(baseDir, 'webhelps', webhelpId);
     let newVersionNumber = 1;
     if (fs.existsSync(docDir)) {
       const versionDirs = fs.readdirSync(docDir, { withFileTypes: true })
@@ -182,7 +191,7 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
 else {
   const webhelpId = Date.now().toString();
   const version = 'v1';
-  const targetDir = path.join(__dirname, 'webhelps', webhelpId, version);
+  const targetDir = path.join(baseDir, 'webhelps', webhelpId, version);
   fs.mkdirSync(targetDir, { recursive: true });
   extractZip(req.file.path, targetDir, () => {
     let subFolder = "";
@@ -231,7 +240,7 @@ else {
 app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;
   const topicPath = req.params[0];
-  const filePath = path.join(__dirname, 'webhelps', webhelpId, version, topicPath);
+  const filePath = path.join(baseDir, 'webhelps', webhelpId, version, topicPath);
   res.sendFile(filePath);
 });
 
@@ -325,7 +334,7 @@ function extractZip(sourcePath, destPath, callback) {
 /**
  * Document Records Persistence
  */
-const documentsFile = path.join(__dirname, 'documents.json');
+const documentsFile = path.join(baseDir, 'documents.json');
 function readDocuments() {
   try {
     if (!fs.existsSync(documentsFile)) {
@@ -375,7 +384,7 @@ app.post('/updateDocument', (req, res) => {
 /**
  * Topic Review Persistence
  */
-const topicReviewDir = path.join(__dirname, 'topic_reviews');
+const topicReviewDir = path.join(baseDir, 'topic_reviews');
 if (!fs.existsSync(topicReviewDir)) {
   fs.mkdirSync(topicReviewDir);
 }

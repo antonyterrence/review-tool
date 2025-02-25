@@ -104,6 +104,7 @@ app.get('/getReviewChanges/:webhelpId/:version/*', (req, res) => {
  * Document Upload Endpoint
  */
 app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
+  // Check if this is an update (existing document)
   if (req.body.docId) {
     const webhelpId = req.body.docId;
     const docDir = path.join(__dirname, 'webhelps', webhelpId);
@@ -138,33 +139,94 @@ app.post('/uploadWebhelp', upload.single('webhelpZip'), (req, res) => {
         const match = fileContent.match(/<title>(.*?)<\/title>/i);
         title = match ? match[1] : "";
       }
-      res.json({ webhelpId, version, title, subFolder });
-    });
-  } else {
-    const webhelpId = Date.now().toString();
-    const version = 'v1';
-    const targetDir = path.join(__dirname, 'webhelps', webhelpId, version);
-    fs.mkdirSync(targetDir, { recursive: true });
-    extractZip(req.file.path, targetDir, () => {
-      let subFolder = "";
-      if (!fs.existsSync(path.join(targetDir, "index.html"))) {
-        const items = fs.readdirSync(targetDir, { withFileTypes: true });
-        const subDirs = items.filter(item => item.isDirectory()).map(item => item.name);
-        if (subDirs.length > 0) {
-          subFolder = subDirs[0];
-        }
+      
+      // Update the document record on the server
+      const docs = readDocuments();
+      const docIndex = docs.findIndex(d => d.docId === webhelpId);
+      if (docIndex !== -1) {
+        const newVersion = {
+          webhelpId,
+          version,
+          title,
+          subFolder,
+          status: "Under Review"
+        };
+        docs[docIndex].versions.push(newVersion);
+        writeDocuments(docs);
+        // Return the updated document record
+        res.json({ doc: docs[docIndex] });
+      } else {
+        // In case the document record is not found, create a new one.
+        const newDoc = {
+          docId: webhelpId,
+          uploader: req.body.uploader || 'Unknown',
+          reviewers: req.body.reviewers ? req.body.reviewers.split(',').map(r => r.trim()) : [],
+          versions: [{
+            webhelpId,
+            version,
+            title,
+            subFolder,
+            status: "Under Review"
+          }]
+        };
+        const docs = readDocuments();
+        docs.push(newDoc);
+        writeDocuments(docs);
+        res.json({ doc: newDoc });
       }
-      let title = "";
-      const indexPath = subFolder ? path.join(targetDir, subFolder, "index.html") : path.join(targetDir, "index.html");
-      if (fs.existsSync(indexPath)) {
-        const fileContent = fs.readFileSync(indexPath, "utf8");
-        const match = fileContent.match(/<title>(.*?)<\/title>/i);
-        title = match ? match[1] : "";
-      }
-      res.json({ webhelpId, version, title, subFolder });
     });
-  }
+  } // New document branch (when no docId is provided)
+  // New document branch
+// New document branch (when no docId is provided)
+// New document branch (when no docId is provided)
+else {
+  const webhelpId = Date.now().toString();
+  const version = 'v1';
+  const targetDir = path.join(__dirname, 'webhelps', webhelpId, version);
+  fs.mkdirSync(targetDir, { recursive: true });
+  extractZip(req.file.path, targetDir, () => {
+    let subFolder = "";
+    if (!fs.existsSync(path.join(targetDir, "index.html"))) {
+      const items = fs.readdirSync(targetDir, { withFileTypes: true });
+      const subDirs = items.filter(item => item.isDirectory()).map(item => item.name);
+      if (subDirs.length > 0) {
+        subFolder = subDirs[0];
+      }
+    }
+    let title = "";
+    const indexPath = subFolder 
+      ? path.join(targetDir, subFolder, "index.html")
+      : path.join(targetDir, "index.html");
+    if (fs.existsSync(indexPath)) {
+      const fileContent = fs.readFileSync(indexPath, "utf8");
+      const match = fileContent.match(/<title>(.*?)<\/title>/i);
+      title = match ? match[1] : "";
+    }
+    // Create a new document record
+    const newDoc = {
+      docId: webhelpId,
+      uploader: req.body.uploader || 'Unknown',
+      reviewers: req.body.reviewers 
+                  ? req.body.reviewers.split(',').map(r => r.trim()) 
+                  : [],
+      versions: [{
+        webhelpId,
+        version,
+        title,
+        subFolder,
+        status: "Under Review"
+      }]
+    };
+    const docs = readDocuments();
+    docs.push(newDoc);
+    writeDocuments(docs);
+    res.json({ doc: newDoc });
+  });
+}
+
+  
 });
+
 
 app.get('/webhelp/:webhelpId/:version/*', (req, res) => {
   const { webhelpId, version } = req.params;

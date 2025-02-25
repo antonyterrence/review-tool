@@ -223,7 +223,7 @@ versionControls.appendChild(metricsBtn);
 renderDashboard();
 
 // Upload Form Submission for new documents.
-const uploadForm = document.getElementById("uploadForm");
+/*const uploadForm = document.getElementById("uploadForm");
 if (uploadForm) {
   uploadForm.addEventListener("submit", function (event) {
     event.preventDefault();
@@ -279,14 +279,82 @@ if (uploadForm) {
         alert("Error uploading file.");
       });
   });
+}*/
+const uploadForm = document.getElementById("uploadForm");
+if (uploadForm) {
+  uploadForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+    const fileInput = document.getElementById("webhelpZip");
+    const file = fileInput.files[0];
+    const reviewersInput = document.getElementById("reviewers").value.trim();
+    if (!file) {
+      alert("Please select a .zip file to upload.");
+      return;
+    }
+    if (reviewersInput === "") {
+      alert("Please enter reviewer names (comma separated).");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("webhelpZip", file);
+    // Append reviewers and uploader so the server can create a complete record.
+    formData.append("reviewers", reviewersInput);
+    formData.append("uploader", currentUser); // currentUser from localStorage
+
+    // Note: No docId is sent here because this is a new document.
+    fetch("/uploadWebhelp", {
+      method: "POST",
+      body: formData,
+    })
+      .then(response => response.json())
+      .then(result => {
+        // The server returns the full new document record in result.doc
+        alert("Upload successful!\nDocument Title: " + result.doc.versions[0].title);
+        renderDashboard();  // Refresh the dashboard to include the new document.
+        uploadForm.reset();
+      })
+      .catch(error => {
+        console.error("Error uploading file:", error);
+        alert("Error uploading file.");
+      });
+  });
 }
+
+
 
 document.querySelector("#metricsModal .close").addEventListener("click", () => {
   document.getElementById("metricsModal").style.display = "none";
 });
 
-// New Version Upload Handling.
 document.getElementById("newVersionFile").addEventListener("change", function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const docId = event.target.dataset.docId;
+    const formData = new FormData();
+    formData.append("webhelpZip", file);
+    formData.append("docId", docId);
+    
+    // Single call—server computes new version and updates document record.
+    fetch("/uploadWebhelp", {
+      method: "POST",
+      body: formData,
+    })
+      .then(response => response.json())
+      .then(result => {
+        // result.doc now contains the updated document record.
+        alert("New version uploaded successfully!");
+        renderDashboard(); // Refresh the dashboard using the updated document records.
+        event.target.value = "";
+      })
+      .catch(error => {
+        console.error("Error uploading new version:", error);
+        alert("Error uploading new version.");
+      });
+  });
+  
+
+// New Version Upload Handling.
+/*document.getElementById("newVersionFile").addEventListener("change", function(event) {
   const file = event.target.files[0];
   if (!file) return;
   const docId = event.target.dataset.docId;
@@ -338,4 +406,4 @@ document.getElementById("newVersionFile").addEventListener("change", function(ev
     .catch(err => {
       console.error("Error fetching documents:", err);
     });
-});
+});*/
